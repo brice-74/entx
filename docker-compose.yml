@@ -1,0 +1,28 @@
+services:
+  entx-test-svc:
+    container_name: entx-test
+    image: golang:1.24.0
+    working_dir: /entx
+    volumes:
+      - .:/entx
+    networks:
+      - entx-test-net
+    depends_on:
+      entx-mysql-test-svc:
+        condition: service_started
+        required: true
+
+  entx-mysql-test-svc:
+    container_name: entx-mysql-test
+    image: mysql:8.4.3
+    working_dir: /entx
+    environment:
+      - MYSQL_ROOT_PASSWORD=testrootpwd
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=testpwd
+    networks:
+      - entx-test-net
+
+networks:
+  entx-test-net:
+    driver: bridge
