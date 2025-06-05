@@ -45,7 +45,8 @@ type AggregateConfig struct {
 
 type Option func(*Config)
 
-var DefaultConf = Config{
+// defaultConf is the configuration with the fewest restrictions to make the hub functional.
+var defaultConf = Config{
 	PageableConfig: PageableConfig{
 		MaxLimit:     100,
 		DefaultLimit: 25,
@@ -53,6 +54,8 @@ var DefaultConf = Config{
 	ScalarQueriesChunkSize:       5,
 	MaxParallelWorkersPerRequest: -1,
 }
+
+var DefaultConf = *defaultConf.BindDeeply()
 
 type Config struct {
 	// Timeouts
@@ -73,10 +76,15 @@ type Config struct {
 }
 
 func NewConfig(opts ...Option) Config {
-	cfg := DefaultConf
+	cfg := defaultConf
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+
+	return *cfg.BindDeeply()
+}
+
+func (cfg *Config) BindDeeply() *Config {
 	cfg.IncludeConfig.AggregateConfig = &cfg.AggregateConfig
 	cfg.IncludeConfig.FilterConfig = &cfg.FilterConfig
 	cfg.IncludeConfig.PageableConfig = &cfg.PageableConfig

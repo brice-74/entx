@@ -1,5 +1,21 @@
-.PHONY: run/test
-run/test:
-	-@docker compose run --rm entx-test-svc sh -c "go test -p 1 -v -vet=off -run \"$(func)\" $(path)"
-	@echo "Cleaning up resources..."
-	-@docker compose down --volumes --remove-orphans
+SHELL := /bin/bash
+
+.PHONY: run/test/e2e
+run/test/e2e:
+	-@docker compose -f ./e2e/docker-compose.yml run \
+		--rm \
+		entx-test-svc sh -c "cd e2e && go test -p 1 -v -vet=off -run \"$(func)\" $(path) -coverpkg=github.com/brice-74/entx/search -coverprofile=./coverage.out" 
+ifeq ($(DOWN),true)
+	-@$(MAKE) down/mysql
+endif
+
+down/mysql:
+	@docker compose -f ./e2e/docker-compose.yml rm -sfv entx-mysql-test-svc
+
+.PHONY: show/test/e2e
+show/test/e2e:
+	@cd e2e && \
+		go tool cover -html=coverage.out -o coverage.html && { \
+			explorer.exe coverage.html; code=$$?; \
+			if [ $$code -eq 0 ] || [ $$code -eq 1 ]; then exit 0; else exit $$code; fi; \
+		}

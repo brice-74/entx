@@ -51,6 +51,7 @@ func (e *Extension) Templates() []*gen.Template {
 
 var neededFeatures = []string{
 	"sql/modifier",
+	"sql/execquery",
 }
 
 func verifyFeatures(g *gen.Graph) error {

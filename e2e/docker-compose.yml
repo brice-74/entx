@@ -1,0 +1,36 @@
+services:
+  entx-test-svc:
+    container_name: entx-test
+    image: golang:1.24.0
+    working_dir: /entx
+    volumes:
+      - ../:/entx
+    environment:
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=testpwd
+      - MYSQL_DATABASE=entx-test
+      - MYSQL_HOST=entx-mysql-test-svc
+      - MYSQL_PORT=3306
+    networks:
+      - entx-test-net
+    depends_on:
+      entx-mysql-test-svc:
+        condition: service_started
+        required: true
+
+  entx-mysql-test-svc:
+    container_name: entx-mysql-test
+    image: mysql:8.4.3
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=testpwd
+      - MYSQL_DATABASE=entx-test
+    volumes:
+      - ./init.test.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - entx-test-net
+
+networks:
+  entx-test-net:
+    driver: bridge

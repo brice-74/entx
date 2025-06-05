@@ -7,7 +7,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-func (sp *SearchFrom) Prepare(
+func (sp *From) Prepare(
 	conf *Config,
 	registry map[string]Node,
 	client Client,
@@ -20,10 +20,10 @@ func (sp *SearchFrom) Prepare(
 		}
 	}
 
-	return sp.SearchParams.Prepare(conf, node, client)
+	return sp.Params.Prepare(conf, node, client)
 }
 
-func (sp *SearchParams) Prepare(
+func (sp *Params) Prepare(
 	conf *Config,
 	node Node,
 	client Client,
@@ -87,7 +87,7 @@ func (sp *SearchParams) Prepare(
 	return
 }
 
-func (sp *SearchParams) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
+func (sp *Params) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
 	if !sp.WithPagination {
 		return nil, nil
 	}
@@ -108,7 +108,7 @@ func (sp *SearchParams) scalarCountSelector(node Node, preds ...func(*sql.Select
 	return sel, nil
 }
 
-func (sp *SearchParams) ValidateAndPreprocess(c *Config) error {
+func (sp *Params) ValidateAndPreprocess(c *Config) error {
 	var err error
 	if err = sp.Filters.ValidateAndPreprocess(&c.FilterConfig); err != nil {
 		return err
@@ -126,7 +126,7 @@ func (sp *SearchParams) ValidateAndPreprocess(c *Config) error {
 	return nil
 }
 
-func (sr *SearchesRequest) ValidateAndPreprocess(c *Config) error {
+func (sr *HubRequest) ValidateAndPreprocess(c *Config) error {
 	if max, got := c.MaxAggregatesPerRequest, len(sr.Aggregates); max != 0 && got > max {
 		return &ValidationError{
 			Rule: "MaxAggregatesPerRequest",

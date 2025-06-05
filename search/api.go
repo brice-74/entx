@@ -105,22 +105,22 @@ type (
 	// Input Types
 	// ------------------------------
 
-	SearchesRequest struct {
-		Searches   []SearchWithKey    `json:"searches,omitempty"`
+	HubRequest struct {
+		Searches   []WithKey          `json:"searches,omitempty"`
 		Aggregates []OverallAggregate `json:"metrics,omitempty"`
 	}
 
-	SearchWithKey struct {
+	WithKey struct {
 		Key string `json:"key"`
-		SearchFrom
+		From
 	}
 
-	SearchFrom struct {
+	From struct {
 		From string `json:"from"`
-		SearchParams
+		Params
 	}
 
-	SearchParams struct {
+	Params struct {
 		Select         Select     `json:"select,omitempty"`
 		Filters        Filters    `json:"filters,omitempty"`
 		Includes       Includes   `json:"includes,omitempty"`

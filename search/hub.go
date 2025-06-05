@@ -28,7 +28,7 @@ func NewHub(
 	}
 }
 
-func (h *Hub) Exec(ctx context.Context, req *SearchesRequest) (*Response, error) {
+func (h *Hub) Exec(ctx context.Context, req *HubRequest) (*Response, error) {
 	ctx, cancel := contextTimeout(ctx, h.conf.RequestTimeout)
 	defer cancel()
 
@@ -62,7 +62,7 @@ type countInfo struct {
 	limit, page int
 }
 
-func (h *Hub) prepareJobs(req *SearchesRequest) (
+func (h *Hub) prepareJobs(req *HubRequest) (
 	[]searchJob,
 	[]countInfo,
 	[][]ScalarQuery,
