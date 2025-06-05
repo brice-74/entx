@@ -60,7 +60,9 @@ func (n *{{ $NodeNameStruct }}) Policy() ent.Policy {
 
 {{- range .BridgePairs }}
 {{ template "bridge" .Forward }}
+{{- if .Inverse }}
 {{ template "bridge" .Inverse }}
+{{- end }}
 {{- end }}
 
 var Graph = BuildGraph()
@@ -72,10 +74,12 @@ func BuildGraph() map[string]{{ $searchImportName }}.Node {
    {{ range .BridgePairs }}
    var {{ .Forward.LowerName }} = new{{ .Forward.Name }}({{ .Forward.LowerLeftNodeName }}Node, {{ .Forward.LowerRightNodeName }}Node)
    {{ .Forward.LowerLeftNodeName }}Node.SetBridge("{{ .Forward.RelName }}", {{ .Forward.LowerName }})
+   {{- if .Inverse }}
    var {{ .Inverse.LowerName }} = new{{ .Inverse.Name }}({{ .Inverse.LowerLeftNodeName }}Node, {{ .Inverse.LowerRightNodeName }}Node)
    {{ .Inverse.LowerLeftNodeName }}Node.SetBridge("{{ .Inverse.RelName }}", {{ .Inverse.LowerName }})
    {{ .Forward.LowerName }}.SetInverse({{ .Inverse.LowerName }})
    {{ .Inverse.LowerName }}.SetInverse({{ .Forward.LowerName }})
+   {{- end }}
    {{ end }}
    return map[string]{{ $searchImportName }}.Node{
       {{- range .Nodes }}

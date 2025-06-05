@@ -8,7 +8,7 @@ import (
 
 const (
 	searchableNodeAnnotKey  = "entx_searchable_node"
-	searchDefaultImportPath = "test-ent/search"
+	searchDefaultImportPath = "github.com/brice-74/entx/search"
 )
 
 type Annotation struct{ NodeConfig }

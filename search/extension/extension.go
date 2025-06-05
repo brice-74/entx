@@ -49,10 +49,37 @@ func (e *Extension) Templates() []*gen.Template {
 	}
 }
 
+var neededFeatures = []string{
+	"sql/modifier",
+}
+
+func verifyFeatures(g *gen.Graph) error {
+	present := make(map[string]struct{}, len(g.Features))
+	for _, f := range g.Features {
+		present[f.Name] = struct{}{}
+	}
+
+	var missing []string
+	for _, name := range neededFeatures {
+		if _, ok := present[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("entx: missing required features: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 func (e *Extension) Hooks() []gen.Hook {
 	return []gen.Hook{
 		func(next gen.Generator) gen.Generator {
 			return gen.GenerateFunc(func(g *gen.Graph) error {
+				if err := verifyFeatures(g); err != nil {
+					return err
+				}
+
 				e.computedNodes = e.conf.ComputeNodes(g.Nodes...)
 
 				if err := next.Generate(g); err != nil {
@@ -69,7 +96,7 @@ func (e *Extension) Hooks() []gen.Hook {
 					{template: e.newTemplate("adapters.tmpl"), params: g},
 				}
 
-				return genFiles(fileInfos...)
+				return genFiles(g.Target, fileInfos...)
 			})
 		},
 	}
@@ -87,8 +114,11 @@ type genFileInfo struct {
 	params   any
 }
 
-func genFiles(fileInfos ...*genFileInfo) error {
-	if err := os.MkdirAll("entx", 0o755); err != nil {
+func genFiles(rootPath string, fileInfos ...*genFileInfo) error {
+	if rootPath[:len(rootPath)-1] != "/" {
+		rootPath += "/"
+	}
+	if err := os.MkdirAll(rootPath+"entx", 0o755); err != nil {
 		return fmt.Errorf("mkdir entx: %w", err)
 	}
 
@@ -107,7 +137,7 @@ func genFiles(fileInfos ...*genFileInfo) error {
 					return fmt.Errorf("execute %w", err)
 				}
 
-				outPath := "entx/" + templateName + ".go"
+				outPath := rootPath + "entx/" + templateName + ".go"
 
 				if err := os.WriteFile(outPath, buf.Bytes(), 0o644); err != nil {
 					return fmt.Errorf("write file %s: %w", outPath, err)
@@ -143,7 +173,7 @@ type GenNode struct {
 
 type GenBridgePair struct {
 	Forward GenBridge
-	Inverse GenBridge
+	Inverse *GenBridge
 }
 
 type GenBridge struct {
@@ -222,7 +252,11 @@ func (ext *Extension) buildBridgePairs(genNodes []GenNode) []GenBridgePair {
 	return pairs
 }
 
-func makeInverseGenBridge(forward GenBridge, e *gen.Edge) GenBridge {
+func makeInverseGenBridge(forward GenBridge, e *gen.Edge) *GenBridge {
+	if e.Type.Name == e.Ref.Type.Name {
+		return nil
+	}
+
 	var relType gen.Rel
 	switch v := e.Rel.Type; v {
 	case gen.M2M, gen.O2O:
@@ -251,7 +285,7 @@ func makeInverseGenBridge(forward GenBridge, e *gen.Edge) GenBridge {
 	inverse.LowerLeftNodeName = lowerFirst(inverse.LeftNode.Name)
 	inverse.LowerRightNodeName = lowerFirst(inverse.RightNode.Name)
 
-	return inverse
+	return &inverse
 }
 
 func makeForwardGenBridge(e *gen.Edge) GenBridge {
