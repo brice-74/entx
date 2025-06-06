@@ -1,6 +1,9 @@
 package search
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type PageableConfig struct {
 	// MaxLimit is the maximum number of items allowed per page.
@@ -57,7 +60,29 @@ var defaultConf = Config{
 
 var DefaultConf = *defaultConf.BindDeeply()
 
+type TransactionStrategy uint8
+
+const (
+	// TransactionPerQueryGroup allows you to logically manage transactions by query group (search query + count pagination).
+	// global aggregations can be added to transactions manually by the client via “transaction_with”.
+	TransactionPerQueryGroup TransactionStrategy = iota
+	// TransactionPerRequest strategy executes all queries sequentially
+	// in an sql transaction, depriving you of parallel execution
+	TransactionPerRequest
+)
+
+type TransactionConfig struct {
+	Enable         bool
+	IsolationLevel sql.IsolationLevel
+	Strategy       TransactionStrategy
+	// permissions
+	AllowClientTransactionToggle bool
+	AllowClientIsolationLevel    bool
+	AllowClientStrategy          bool
+}
+
 type Config struct {
+
 	// Timeouts
 	RequestTimeout     time.Duration
 	SearchQueryTimeout time.Duration

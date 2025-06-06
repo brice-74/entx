@@ -10,6 +10,8 @@ import (
 	stdsql "database/sql"
 )
 
+type Graph = map[string]Node
+
 type (
 	Client interface {
 		GetEntityClient(Node) (EntityClient, error)
@@ -100,27 +102,26 @@ const (
 )
 
 type (
-
 	// ------------------------------
 	// Input Types
 	// ------------------------------
 
-	HubRequest struct {
-		Searches   []WithKey          `json:"searches,omitempty"`
-		Aggregates []OverallAggregate `json:"metrics,omitempty"`
+	CompositeRequest struct {
+		Searches   []NamedQuery       `json:"searches,omitempty"`
+		Aggregates []OverallAggregate `json:"aggregates,omitempty"`
 	}
 
-	WithKey struct {
+	NamedQuery struct {
 		Key string `json:"key"`
-		From
+		TargetedQuery
 	}
 
-	From struct {
+	TargetedQuery struct {
 		From string `json:"from"`
-		Params
+		QueryOptions
 	}
 
-	Params struct {
+	QueryOptions struct {
 		Select         Select     `json:"select,omitempty"`
 		Filters        Filters    `json:"filters,omitempty"`
 		Includes       Includes   `json:"includes,omitempty"`
@@ -197,7 +198,8 @@ type (
 	Aggregates []Aggregate
 
 	OverallAggregate struct {
-		ParralelGroup string `json:"parralel_group,omitempty"`
+		TransactionWith string `json:"transaction_with,omitempty"`
+		ParralelGroup   string `json:"parralel_group,omitempty"`
 		BaseAggregate
 	}
 
@@ -232,7 +234,7 @@ type (
 		Meta SearchMeta `json:"meta,omitempty"`
 	}
 
-	Response struct {
+	CompositeResponse struct {
 		Searches map[string]*SearchResponse `json:"searches,omitempty"`
 		Meta     GlobalAggregatesMeta       `json:"meta,omitempty"`
 	}

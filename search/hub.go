@@ -11,7 +11,7 @@ import (
 )
 
 type Hub struct {
-	graph  map[string]Node
+	graph  Graph
 	client Client
 	conf   Config
 }

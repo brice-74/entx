@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"context"
+	"database/sql"
 	"e2e/ent"
 	"e2e/ent/entx"
 	"fmt"
@@ -26,6 +27,10 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+
+	tx, _ := client.Tx(nil)
+	t, _ := tx.Client().BeginTx(nil, &sql.TxOptions{Isolation: sql.LevelDefault})
+	tx.Commit()
 
 	hub = search.NewHub(
 		entx.Graph,

@@ -7,34 +7,69 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-func (sp *From) Prepare(
+type CompositeSearch struct {
+	Key      string
+	ExecFn   func(context.Context) (any, int, error)
+	Paginate *PaginateInfos
+}
+
+func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph, client Client) (
+	*CompositeSearch,
+	error,
+) {
+	if q.Key == "" {
+		q.Key = fmt.Sprintf("s%d", uniqueIndex+1)
+	}
+
+	exec, countSel, err := q.TargetedQuery.Prepare(conf, graph, client)
+	if err != nil {
+		return nil, err
+	}
+
+	c := CompositeSearch{
+		Key:    q.Key,
+		ExecFn: exec,
+	}
+
+	if countSel != nil {
+		c.Paginate = &PaginateInfos{
+			CountSelector: countSel,
+			Page:          q.Page,
+			Limit:         q.Limit,
+		}
+	}
+
+	return &c, nil
+}
+
+func (q *TargetedQuery) Prepare(
 	conf *Config,
 	registry map[string]Node,
 	client Client,
 ) (execute func(ctx context.Context) (any, int, error), countSel *sql.Selector, err error) {
-	node, found := registry[sp.From]
+	node, found := registry[q.From]
 	if !found {
 		return nil, nil, &ValidationError{
 			Rule: "UnknowRootNode",
-			Err:  fmt.Errorf("node named %s not found", sp.From),
+			Err:  fmt.Errorf("node named %s not found", q.From),
 		}
 	}
 
-	return sp.Params.Prepare(conf, node, client)
+	return q.QueryOptions.Prepare(conf, node, client)
 }
 
-func (sp *Params) Prepare(
+func (qo *QueryOptions) Prepare(
 	conf *Config,
 	node Node,
 	client Client,
 ) (execute func(ctx context.Context) (any, int, error), countSel *sql.Selector, err error) {
 	q := node.NewQuery(client)
 
-	if err = sp.Select.Apply(q, node); err != nil {
+	if err = qo.Select.Apply(q, node); err != nil {
 		return
 	}
 
-	if err = sp.Includes.Apply(q, node); err != nil {
+	if err = qo.Includes.Apply(q, node); err != nil {
 		return
 	}
 
@@ -42,31 +77,31 @@ func (sp *Params) Prepare(
 		aggFields []string
 		preds     []func(*sql.Selector)
 	)
-	if ps, fields, err := sp.Aggregates.Predicate(node); err != nil {
+	if ps, fields, err := qo.Aggregates.Predicate(node); err != nil {
 		return nil, nil, err
 	} else if len(ps) > 0 {
 		aggFields = fields
 		preds = append(preds, ps...)
 	}
 
-	filtPreds, err := sp.Filters.Predicate(node)
+	filtPreds, err := qo.Filters.Predicate(node)
 	if err != nil {
 		return nil, nil, err
 	} else if len(filtPreds) > 0 {
 		preds = append(preds, filtPreds...)
 	}
 
-	if ps, err := sp.Sort.Predicate(node); err != nil {
+	if ps, err := qo.Sort.Predicate(node); err != nil {
 		return nil, nil, err
 	} else if len(ps) > 0 {
 		preds = append(preds, ps...)
 	}
 
-	preds = append(preds, sp.Pageable.Predicate(true))
+	preds = append(preds, qo.Pageable.Predicate(true))
 
 	q.Predicate(preds...)
 
-	countSel, err = sp.scalarCountSelector(node, filtPreds...)
+	countSel, err = qo.scalarCountSelector(node, filtPreds...)
 	if err != nil {
 		return
 	}
@@ -87,8 +122,35 @@ func (sp *Params) Prepare(
 	return
 }
 
-func (sp *Params) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
-	if !sp.WithPagination {
+/*
+	 func (qo *QueryOptions) Execute(
+		ctx context.Context,
+		conf *Config,
+		node Node,
+		client Client,
+
+	) (*SearchResponse, error) {
+		exec, countSel, err := qo.Prepare(conf, node, client)
+		if err != nil {
+			return nil, err
+		}
+		query, args := countSel.Query()
+		rows, err := client.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		if !rows.Next() {
+			return nil, fmt.Errorf("no rows returned")
+		}
+		var count *sql.NullInt64
+		if err := rows.Scan(count); err != nil {
+			return nil, err
+		}
+	}
+*/
+func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
+	if !qo.WithPagination {
 		return nil, nil
 	}
 
@@ -108,25 +170,25 @@ func (sp *Params) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (
 	return sel, nil
 }
 
-func (sp *Params) ValidateAndPreprocess(c *Config) error {
+func (qo *QueryOptions) ValidateAndPreprocess(c *Config) error {
 	var err error
-	if err = sp.Filters.ValidateAndPreprocess(&c.FilterConfig); err != nil {
+	if err = qo.Filters.ValidateAndPreprocess(&c.FilterConfig); err != nil {
 		return err
 	}
-	if err = sp.Includes.ValidateAndPreprocess(&c.IncludeConfig); err != nil {
+	if err = qo.Includes.ValidateAndPreprocess(&c.IncludeConfig); err != nil {
 		return err
 	}
-	if err = sp.Aggregates.ValidateAndPreprocess(&c.AggregateConfig); err != nil {
+	if err = qo.Aggregates.ValidateAndPreprocess(&c.AggregateConfig); err != nil {
 		return err
 	}
-	if err = sp.Sort.ValidateAndPreprocess(&c.SortConfig); err != nil {
+	if err = qo.Sort.ValidateAndPreprocess(&c.SortConfig); err != nil {
 		return err
 	}
-	sp.Pageable.Sanitize(&c.PageableConfig)
+	qo.Pageable.Sanitize(&c.PageableConfig)
 	return nil
 }
 
-func (sr *HubRequest) ValidateAndPreprocess(c *Config) error {
+func (sr *CompositeRequest) ValidateAndPreprocess(c *Config) error {
 	if max, got := c.MaxAggregatesPerRequest, len(sr.Aggregates); max != 0 && got > max {
 		return &ValidationError{
 			Rule: "MaxAggregatesPerRequest",

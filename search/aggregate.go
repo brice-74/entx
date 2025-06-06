@@ -270,12 +270,12 @@ func (a *OverallAggregate) resolveField(registry map[string]Node) (node Node, fi
 }
 
 // Build constructs a standalone selector for the overall aggregate.
-func (a *OverallAggregate) Build(registry map[string]Node) (*sql.Selector, string, error) {
+func (a *OverallAggregate) Build(graph Graph) (*sql.Selector, string, error) {
 	if !a.preprocessed {
 		panic("OverallAggregate.Build: called before preprocess")
 	}
 
-	node, field, err := a.resolveField(registry)
+	node, field, err := a.resolveField(graph)
 	if err != nil {
 		return nil, "", err
 	}
@@ -304,6 +304,41 @@ func (a *OverallAggregate) Build(registry map[string]Node) (*sql.Selector, strin
 
 	sel = sel.Select(fn(expr)).As(alias)
 	return sel, alias, nil
+}
+
+type CompositeAggregateBuild struct {
+	Key     string
+	Sel     *sql.Selector
+	AggType Agg
+}
+
+func (ab *CompositeAggregateBuild) ToScalarQuery() *ScalarQuery {
+	sq := &ScalarQuery{
+		Selector: ab.Sel,
+		Key:      ab.Key,
+	}
+	if ab.AggType == AggCount {
+		sq.Dest = new(sql.NullInt64)
+	} else {
+		sq.Dest = new(sql.NullFloat64)
+	}
+	return sq
+}
+
+func (a *OverallAggregate) Prepare(graph Graph) (*CompositeAggregateBuild, error) {
+	sel, alias, err := a.Build(graph)
+	if err != nil {
+		return nil, err
+	}
+	return &CompositeAggregateBuild{
+		Key:     alias,
+		Sel:     sel,
+		AggType: a.Type,
+	}, nil
+}
+
+func (a *OverallAggregate) Group() string {
+	return a.ParralelGroup
 }
 
 func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error {
