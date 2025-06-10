@@ -50,6 +50,10 @@ type Option func(*Config)
 
 // defaultConf is the configuration with the fewest restrictions to make the hub functional.
 var defaultConf = Config{
+	Transaction: TransactionConfig{
+		EnableClientGroupsInput:   true,
+		AllowClientIsolationLevel: true,
+	},
 	PageableConfig: PageableConfig{
 		MaxLimit:     100,
 		DefaultLimit: 25,
@@ -60,29 +64,15 @@ var defaultConf = Config{
 
 var DefaultConf = *defaultConf.BindDeeply()
 
-type TransactionStrategy uint8
-
-const (
-	// TransactionPerQueryGroup allows you to logically manage transactions by query group (search query + count pagination).
-	// global aggregations can be added to transactions manually by the client via “transaction_with”.
-	TransactionPerQueryGroup TransactionStrategy = iota
-	// TransactionPerRequest strategy executes all queries sequentially
-	// in an sql transaction, depriving you of parallel execution
-	TransactionPerRequest
-)
-
 type TransactionConfig struct {
-	Enable         bool
 	IsolationLevel sql.IsolationLevel
-	Strategy       TransactionStrategy
-	// permissions
-	AllowClientTransactionToggle bool
-	AllowClientIsolationLevel    bool
-	AllowClientStrategy          bool
+	// Client input permissions
+	EnableClientGroupsInput   bool
+	AllowClientIsolationLevel bool
 }
 
 type Config struct {
-
+	Transaction TransactionConfig
 	// Timeouts
 	RequestTimeout     time.Duration
 	SearchQueryTimeout time.Duration
@@ -90,7 +80,7 @@ type Config struct {
 	// Batch sizing
 	ScalarQueriesChunkSize       int
 	MaxParallelWorkersPerRequest int
-	// Validation
+	// Validations
 	MaxAggregatesPerRequest int
 	MaxSearchesPerRequest   int
 	PageableConfig

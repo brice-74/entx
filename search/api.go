@@ -13,10 +13,16 @@ import (
 type Graph = map[string]Node
 
 type (
+	Transaction interface {
+		Rollback() error
+		Commit() error
+	}
+
 	Client interface {
 		GetEntityClient(Node) (EntityClient, error)
 		MustGetEntityClient(Node) EntityClient
 		QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error)
+		Tx(ctx context.Context, isolation stdsql.IsolationLevel) (Transaction, Client, error)
 	}
 
 	EntityClient interface {
@@ -105,6 +111,17 @@ type (
 	// ------------------------------
 	// Input Types
 	// ------------------------------
+
+	RequestBundle struct {
+		Transactions   []TransactionRequest `json:"transactions,omitempty"`
+		ParralelGroups [][]OverallAggregate `json:"parralel_groups,omitempty"`
+		CompositeRequest
+	}
+
+	TransactionRequest struct {
+		TransactionIsolationLevel *int `json:"transaction_isolation_level,omitempty"`
+		CompositeRequest
+	}
 
 	CompositeRequest struct {
 		Searches   []NamedQuery       `json:"searches,omitempty"`
@@ -198,8 +215,6 @@ type (
 	Aggregates []Aggregate
 
 	OverallAggregate struct {
-		TransactionWith string `json:"transaction_with,omitempty"`
-		ParralelGroup   string `json:"parralel_group,omitempty"`
 		BaseAggregate
 	}
 

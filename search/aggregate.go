@@ -325,7 +325,7 @@ func (ab *CompositeAggregateBuild) ToScalarQuery() *ScalarQuery {
 	return sq
 }
 
-func (a *OverallAggregate) Prepare(graph Graph) (*CompositeAggregateBuild, error) {
+func (a *OverallAggregate) PrepareComposite(graph Graph) (*CompositeAggregateBuild, error) {
 	sel, alias, err := a.Build(graph)
 	if err != nil {
 		return nil, err
@@ -335,10 +335,6 @@ func (a *OverallAggregate) Prepare(graph Graph) (*CompositeAggregateBuild, error
 		Sel:     sel,
 		AggType: a.Type,
 	}, nil
-}
-
-func (a *OverallAggregate) Group() string {
-	return a.ParralelGroup
 }
 
 func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error {

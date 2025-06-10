@@ -2,18 +2,22 @@ package search
 
 import (
 	"context"
+	"sync"
+	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type Composite struct {
 	graph  Graph
 	client Client
-	conf   Config
+	conf   *Config
 }
 
 func NewComposite(
 	graph Graph,
 	client Client,
-	conf Config,
+	conf *Config,
 ) *Composite {
 	return &Composite{
 		graph,
@@ -22,37 +26,106 @@ func NewComposite(
 	}
 }
 
-func (c *Composite) Exec(ctx context.Context, req *CompositeRequest) (*CompositeResponse, error) {
+type TransactionGroup struct {
+	client   Client
+	tx       Transaction
+	searches []*CompositeSearch
+}
+
+func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeResponse, error) {
 	ctx, cancel := contextTimeout(ctx, c.conf.RequestTimeout)
 	defer cancel()
 
-	if err := req.ValidateAndPreprocess(&c.conf); err != nil {
+	totalAggregates, totalSearches, err := req.ValidateAndPreprocess(c.conf)
+	if err != nil {
 		return nil, err
 	}
 
-	var (
-		searches = make([]*CompositeSearch, 0, len(req.Searches))
-		scalars  []*ScalarQuery
-	)
+	var scalars = make([]*ScalarQuery, 0, len(req.Aggregates))
+	for i, a := range req.Aggregates {
+		composite, err := a.PrepareComposite(c.graph)
+		if err != nil {
+			return nil, err
+		}
+		scalars[i] = composite.ToScalarQuery()
+	}
+
 	for i, s := range req.Searches {
-		s, err := s.PrepareComposite(i, &c.conf, c.graph, c.client)
+		composite, err := s.PrepareComposite(i, c.conf, c.graph, c.client)
 		if err != nil {
 			return nil, err
 		}
-		if s.Paginate != nil {
-			scalars = append(scalars, s.Paginate.ToScalarQuery(s.Key))
-		}
-		searches[i] = s
+		scalars[i] = composite.ToScalarQuery()
 	}
 
-	for _, a := range req.Aggregates {
-		agg, err := a.Prepare(c.graph)
+	/* txGroups := make([]*TransactionGroup, 0, len(req.Transactions))
+	for i, t := range req.Transactions {
+		isolationLevel := c.conf.Transaction.IsolationLevel
+		if v := t.TransactionIsolationLevel; v != nil {
+			isolationLevel = sql.IsolationLevel(*v)
+		}
+		tx, clientTx, err := c.client.Tx(ctx, isolationLevel)
 		if err != nil {
 			return nil, err
 		}
+		txGroup := TransactionGroup{
+			tx:       tx,
+			client:   clientTx,
+			searches: make([]*CompositeSearch, 0, len(req.Searches)),
+		}
 
-		scalars = append(scalars, agg.ToScalarQuery())
+		for _, s := range req.Searches {
+			composite, err := s.PrepareComposite(i, c.conf, c.graph, c.client)
+			if err != nil {
+				return nil, err
+			}
+
+			txGroup.searches = append(txGroup.searches, composite)
+		}
+	} */
+
+	return &CompositeResponse{Searches: searches, Meta: GlobalAggregatesMeta{aggregates}}, nil
+}
+
+func (c *Composite) searchJob() {
+
+}
+
+type Job[K comparable, R any] struct {
+	Key  K
+	Exec func(ctx context.Context) (R, error)
+}
+
+func RunJobs[K comparable, R any](
+	ctx context.Context,
+	jobs []Job[K, R],
+	wg *errgroup.Group,
+	timeout time.Duration,
+) map[K]R {
+	results := make(map[K]R, len(jobs))
+	var mu sync.Mutex
+
+	for _, job := range jobs {
+		job := job
+		if ctx.Err() != nil {
+			break
+		}
+
+		wg.Go(func() error {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+
+			res, err := job.Exec(ctx)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			results[job.Key] = res
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	return &Response{Searches: searches, Meta: GlobalAggregatesMeta{aggregates}}, nil
+	return results
 }

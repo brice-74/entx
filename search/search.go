@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
@@ -122,33 +123,25 @@ func (qo *QueryOptions) Prepare(
 	return
 }
 
-/*
-	 func (qo *QueryOptions) Execute(
-		ctx context.Context,
-		conf *Config,
-		node Node,
-		client Client,
+func (s Select) Apply(q Query, node Node) error {
+	if len(s) > 0 {
+		for i, v := range s {
+			f := node.FieldByName(v)
+			if f == nil {
+				return &QueryBuildError{
+					Op:  "Include.Apply",
+					Err: fmt.Errorf("node %q has no field named %q", node.Name(), v),
+				}
+			}
+			s[i] = f.StorageName
+		}
 
-	) (*SearchResponse, error) {
-		exec, countSel, err := qo.Prepare(conf, node, client)
-		if err != nil {
-			return nil, err
-		}
-		query, args := countSel.Query()
-		rows, err := client.QueryContext(ctx, query, args...)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		if !rows.Next() {
-			return nil, fmt.Errorf("no rows returned")
-		}
-		var count *sql.NullInt64
-		if err := rows.Scan(count); err != nil {
-			return nil, err
-		}
+		q.Select(s...)
 	}
-*/
+
+	return nil
+}
+
 func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
 	if !qo.WithPagination {
 		return nil, nil
@@ -170,6 +163,10 @@ func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Select
 	return sel, nil
 }
 
+// ------------------------------
+// Validations
+// ------------------------------
+
 func (qo *QueryOptions) ValidateAndPreprocess(c *Config) error {
 	var err error
 	if err = qo.Filters.ValidateAndPreprocess(&c.FilterConfig); err != nil {
@@ -188,48 +185,97 @@ func (qo *QueryOptions) ValidateAndPreprocess(c *Config) error {
 	return nil
 }
 
-func (sr *CompositeRequest) ValidateAndPreprocess(c *Config) error {
-	if max, got := c.MaxAggregatesPerRequest, len(sr.Aggregates); max != 0 && got > max {
-		return &ValidationError{
+func (r *RequestBundle) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
+	if len(r.Transactions) > 0 && !c.Transaction.EnableClientGroupsInput {
+		return 0, 0, &ValidationError{
+			Rule: "TransactionGroupsInputDisable",
+			Err:  errors.New("transactions groups usage is not allowed"),
+		}
+	}
+
+	totalAgg, totalSearch := 0, 0
+
+	agg, search, err := r.CompositeRequest.ValidateAndPreprocess(c)
+	if err != nil {
+		return 0, 0, err
+	}
+	totalAgg += agg
+	totalSearch += search
+
+	for i := range r.Transactions {
+		agg, search, err := r.Transactions[i].ValidateAndPreprocess(c)
+		if err != nil {
+			return 0, 0, err
+		}
+		totalAgg += agg
+		totalSearch += search
+	}
+
+	for i1 := range r.ParralelGroups {
+		for i2 := range r.ParralelGroups[i1] {
+			if err = r.ParralelGroups[i1][i2].ValidateAndPreprocess(&c.FilterConfig); err != nil {
+				return 0, 0, err
+			}
+			totalAgg++
+		}
+	}
+
+	if c.MaxAggregatesPerRequest != 0 && totalAgg > c.MaxAggregatesPerRequest {
+		return 0, 0, &ValidationError{
+			Rule: "MaxAggregatesPerBundle",
+			Err:  fmt.Errorf("found %d aggregates in bundle, but the maximum allowed is %d", totalAgg, c.MaxAggregatesPerRequest),
+		}
+	}
+	if c.MaxSearchesPerRequest != 0 && totalSearch > c.MaxSearchesPerRequest {
+		return 0, 0, &ValidationError{
+			Rule: "MaxSearchesPerBundle",
+			Err:  fmt.Errorf("found %d searches in bundle, but the maximum allowed is %d", totalSearch, c.MaxSearchesPerRequest),
+		}
+	}
+
+	return totalAgg, totalSearch, nil
+}
+
+func (tr *TransactionRequest) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
+	if len(tr.Searches)+len(tr.Aggregates) <= 1 {
+		return 0, 0, &ValidationError{
+			Rule: "TransactionUnnecessary",
+			Err:  errors.New("transaction with a single search or one aggregate is unnecessary"),
+		}
+	}
+	if tr.TransactionIsolationLevel != nil && !c.Transaction.AllowClientIsolationLevel {
+		return 0, 0, &ValidationError{
+			Rule: "TransactionClientIsolationLevelDisallow",
+			Err:  errors.New("transaction_isolation_level parameter is not allowed"),
+		}
+	}
+	return tr.CompositeRequest.ValidateAndPreprocess(c)
+}
+
+func (sr *CompositeRequest) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
+	if c.MaxAggregatesPerRequest != 0 && len(sr.Aggregates) > c.MaxAggregatesPerRequest {
+		return 0, 0, &ValidationError{
 			Rule: "MaxAggregatesPerRequest",
-			Err:  fmt.Errorf("found %d aggregates, but the maximum allowed is %d", got, max),
+			Err:  fmt.Errorf("found %d aggregates, but the maximum allowed is %d", len(sr.Aggregates), c.MaxAggregatesPerRequest),
 		}
 	}
-	if max, got := c.MaxSearchesPerRequest, len(sr.Searches); max != 0 && got > max {
-		return &ValidationError{
+	if c.MaxSearchesPerRequest != 0 && len(sr.Searches) > c.MaxSearchesPerRequest {
+		return 0, 0, &ValidationError{
 			Rule: "MaxSearchesPerRequest",
-			Err:  fmt.Errorf("found %d searches, but the maximum allowed is %d", got, max),
+			Err:  fmt.Errorf("found %d searches, but the maximum allowed is %d", len(sr.Searches), c.MaxSearchesPerRequest),
 		}
 	}
-	var err error
+
 	for i := range sr.Aggregates {
 		if err = sr.Aggregates[i].ValidateAndPreprocess(&c.FilterConfig); err != nil {
-			return err
+			return 0, 0, err
 		}
 	}
 	for i := range sr.Searches {
 		if err = sr.Searches[i].ValidateAndPreprocess(c); err != nil {
-			return err
+			return 0, 0, err
 		}
 	}
-	return nil
-}
 
-func (s Select) Apply(q Query, node Node) error {
-	if len(s) > 0 {
-		for i, v := range s {
-			f := node.FieldByName(v)
-			if f == nil {
-				return &QueryBuildError{
-					Op:  "Include.Apply",
-					Err: fmt.Errorf("node %q has no field named %q", node.Name(), v),
-				}
-			}
-			s[i] = f.StorageName
-		}
-
-		q.Select(s...)
-	}
-
-	return nil
+	return len(sr.Aggregates), len(sr.Searches), nil
 }
