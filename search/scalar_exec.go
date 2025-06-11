@@ -14,24 +14,6 @@ type ScalarQuery struct {
 	Dest     any           // destination pointer, destinations that implement the driver.Valuer are processed.
 }
 
-type ScalarExecutor struct {
-	Queries []ScalarQuery
-}
-
-func NewScalarExecutor(len int) *ScalarExecutor {
-	return &ScalarExecutor{Queries: make([]ScalarQuery, 0, len)}
-}
-
-func (e *ScalarExecutor) Add(sel *sql.Selector, key string, dest any) *ScalarExecutor {
-	e.Queries = append(e.Queries, ScalarQuery{Selector: sel, Key: key, Dest: dest})
-	return e
-}
-
-func (e *ScalarExecutor) AddQ(queries ...ScalarQuery) *ScalarExecutor {
-	e.Queries = append(e.Queries, queries...)
-	return e
-}
-
 // Execute constructs and executes a query such as :
 //
 //	SELECT
@@ -40,14 +22,15 @@ func (e *ScalarExecutor) AddQ(queries ...ScalarQuery) *ScalarExecutor {
 //	  …
 //
 // and scans directly into Dest.
-func (e *ScalarExecutor) Execute(ctx context.Context, client Client) (map[string]any, error) {
-	if len(e.Queries) == 0 {
-		return nil, nil
+func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery) (map[string]any, error) {
+	if len(scalars) <= 0 {
+		return nil, fmt.Errorf("ExecuteScalars: empty scalars input")
 	}
 
 	sel := sql.Select()
-	dests := make([]any, len(e.Queries))
-	for i, q := range e.Queries {
+	lenScalars := len(scalars)
+	dests := make([]any, lenScalars)
+	for i, q := range scalars {
 		sel.AppendSelectExprAs(q.Selector, q.Key)
 		dests[i] = q.Dest
 	}
@@ -59,14 +42,14 @@ func (e *ScalarExecutor) Execute(ctx context.Context, client Client) (map[string
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		return nil, fmt.Errorf("no rows returned")
+		return nil, fmt.Errorf("ExecuteScalars: no rows returned")
 	}
 	if err := rows.Scan(dests...); err != nil {
 		return nil, err
 	}
 
-	res := make(map[string]any, len(e.Queries))
-	for _, q := range e.Queries {
+	res := make(map[string]any, lenScalars)
+	for _, q := range scalars {
 		if v, ok := q.Dest.(driver.Valuer); ok {
 			val, err := v.Value()
 			if err != nil {

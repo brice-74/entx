@@ -150,9 +150,13 @@ type (
 
 	Select []string
 
-	Pageable struct {
-		Page  int `json:"page,omitempty"`
+	Limit struct {
 		Limit int `json:"limit,omitempty"`
+	}
+
+	Pageable struct {
+		Page int `json:"page,omitempty"`
+		Limit
 	}
 
 	Sort struct {
@@ -189,7 +193,7 @@ type (
 		Includes   Includes   `json:"includes,omitempty"`
 		Sort       Sorts      `json:"sort,omitempty"`
 		Aggregates Aggregates `json:"aggregates,omitempty"`
-		Pageable
+		Limit
 		// pre-processed segments
 		relationParts []string
 		preprocessed  bool

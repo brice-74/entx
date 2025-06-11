@@ -306,35 +306,21 @@ func (a *OverallAggregate) Build(graph Graph) (*sql.Selector, string, error) {
 	return sel, alias, nil
 }
 
-type CompositeAggregateBuild struct {
-	Key     string
-	Sel     *sql.Selector
-	AggType Agg
-}
-
-func (ab *CompositeAggregateBuild) ToScalarQuery() *ScalarQuery {
-	sq := &ScalarQuery{
-		Selector: ab.Sel,
-		Key:      ab.Key,
-	}
-	if ab.AggType == AggCount {
-		sq.Dest = new(sql.NullInt64)
-	} else {
-		sq.Dest = new(sql.NullFloat64)
-	}
-	return sq
-}
-
-func (a *OverallAggregate) PrepareComposite(graph Graph) (*CompositeAggregateBuild, error) {
+func (a *OverallAggregate) PrepareScalar(graph Graph) (*ScalarQuery, error) {
 	sel, alias, err := a.Build(graph)
 	if err != nil {
 		return nil, err
 	}
-	return &CompositeAggregateBuild{
-		Key:     alias,
-		Sel:     sel,
-		AggType: a.Type,
-	}, nil
+	sq := &ScalarQuery{
+		Selector: sel,
+		Key:      alias,
+	}
+	if a.Type == AggCount {
+		sq.Dest = new(sql.NullInt64)
+	} else {
+		sq.Dest = new(sql.NullFloat64)
+	}
+	return sq, nil
 }
 
 func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error {

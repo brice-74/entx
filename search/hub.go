@@ -228,7 +228,7 @@ func (h *Hub) extractAggregates(
 	return out
 }
 
-func splitInChunks[T any](input []T, batchSize int) [][]T {
+/* func splitInChunks[T any](input []T, batchSize int) [][]T {
 	if batchSize <= 0 || batchSize >= len(input) {
 		if len(input) == 0 {
 			return nil
@@ -242,3 +242,4 @@ func splitInChunks[T any](input []T, batchSize int) [][]T {
 	}
 	return chunks
 }
+*/

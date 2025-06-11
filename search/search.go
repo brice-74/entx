@@ -10,11 +10,11 @@ import (
 
 type CompositeSearch struct {
 	Key      string
-	ExecFn   func(context.Context) (any, int, error)
+	ExecFn   func(context.Context, Client) (any, int, error)
 	Paginate *PaginateInfos
 }
 
-func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph, client Client) (
+func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph) (
 	*CompositeSearch,
 	error,
 ) {
@@ -22,7 +22,7 @@ func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph
 		q.Key = fmt.Sprintf("s%d", uniqueIndex+1)
 	}
 
-	exec, countSel, err := q.TargetedQuery.Prepare(conf, graph, client)
+	exec, countSel, err := q.TargetedQuery.Prepare(conf, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph
 		c.Paginate = &PaginateInfos{
 			CountSelector: countSel,
 			Page:          q.Page,
-			Limit:         q.Limit,
+			Limit:         q.Limit.Limit,
 		}
 	}
 
@@ -46,8 +46,7 @@ func (q *NamedQuery) PrepareComposite(uniqueIndex int, conf *Config, graph Graph
 func (q *TargetedQuery) Prepare(
 	conf *Config,
 	registry map[string]Node,
-	client Client,
-) (execute func(ctx context.Context) (any, int, error), countSel *sql.Selector, err error) {
+) (execute func(ctx context.Context, client Client) (any, int, error), countSel *sql.Selector, err error) {
 	node, found := registry[q.From]
 	if !found {
 		return nil, nil, &ValidationError{
@@ -56,24 +55,13 @@ func (q *TargetedQuery) Prepare(
 		}
 	}
 
-	return q.QueryOptions.Prepare(conf, node, client)
+	return q.QueryOptions.Prepare(conf, node)
 }
 
 func (qo *QueryOptions) Prepare(
 	conf *Config,
 	node Node,
-	client Client,
-) (execute func(ctx context.Context) (any, int, error), countSel *sql.Selector, err error) {
-	q := node.NewQuery(client)
-
-	if err = qo.Select.Apply(q, node); err != nil {
-		return
-	}
-
-	if err = qo.Includes.Apply(q, node); err != nil {
-		return
-	}
-
+) (execute func(ctx context.Context, client Client) (any, int, error), countSel *sql.Selector, err error) {
 	var (
 		aggFields []string
 		preds     []func(*sql.Selector)
@@ -100,14 +88,32 @@ func (qo *QueryOptions) Prepare(
 
 	preds = append(preds, qo.Pageable.Predicate(true))
 
-	q.Predicate(preds...)
-
 	countSel, err = qo.scalarCountSelector(node, filtPreds...)
 	if err != nil {
 		return
 	}
 
-	execute = func(ctx context.Context) (any, int, error) {
+	selectApply, err := qo.Select.PredicateApplicator(node)
+	if err != nil {
+		return
+	}
+
+	incApplies, err := qo.Includes.PredicateApplicators(node)
+	if err != nil {
+		return
+	}
+
+	execute = func(ctx context.Context, client Client) (any, int, error) {
+		q := node.NewQuery(client)
+
+		for _, apply := range incApplies {
+			apply(q)
+		}
+
+		selectApply(q)
+
+		q.Predicate(preds...)
+
 		entities, err := q.All(ctx)
 		if err != nil {
 			return nil, 0, err
@@ -123,12 +129,12 @@ func (qo *QueryOptions) Prepare(
 	return
 }
 
-func (s Select) Apply(q Query, node Node) error {
+func (s Select) PredicateApplicator(node Node) (func(q Query), error) {
 	if len(s) > 0 {
 		for i, v := range s {
 			f := node.FieldByName(v)
 			if f == nil {
-				return &QueryBuildError{
+				return nil, &QueryBuildError{
 					Op:  "Include.Apply",
 					Err: fmt.Errorf("node %q has no field named %q", node.Name(), v),
 				}
@@ -136,10 +142,12 @@ func (s Select) Apply(q Query, node Node) error {
 			s[i] = f.StorageName
 		}
 
-		q.Select(s...)
+		return func(q Query) {
+			q.Select(s...)
+		}, nil
 	}
 
-	return nil
+	return func(q Query) {}, nil
 }
 
 func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {

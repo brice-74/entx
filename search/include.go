@@ -6,21 +6,23 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-func (incs Includes) Apply(q Query, node Node) error {
-	for _, inc := range incs {
-		if _, err := inc.Apply(q, node); err != nil {
-			return err
+func (incs Includes) PredicateApplicators(node Node) ([]func(Query), error) {
+	var applies = make([]func(Query), 0, len(incs))
+	for i, inc := range incs {
+		applicator, err := inc.PredicateApplicator(node)
+		if err != nil {
+			return nil, err
 		}
+		applies[i] = applicator
 	}
-	return nil
+	return applies, nil
 }
 
-func (inc *Include) Apply(q Query, node Node) (Query, error) {
+func (inc *Include) PredicateApplicator(node Node) (func(Query), error) {
 	if !inc.preprocessed {
 		panic("Include.Apply: called before preprocess")
 	}
 	current := node
-	var childQ Query
 	var bridges = make([]Bridge, 0, len(inc.relationParts))
 	for _, rel := range inc.relationParts {
 		bridge := current.Bridge(rel)
@@ -46,27 +48,6 @@ func (inc *Include) Apply(q Query, node Node) (Query, error) {
 		preds = append(preds, ps...)
 	}
 
-	var hasAggregates = len(aggFields) > 0
-	for i, bridge := range bridges {
-		isLastIndex := len(bridges)-1 == i
-		childQ = nil
-
-		if isLastIndex && hasAggregates {
-			bridge.Include(q, func(qChild Query) {
-				childQ = qChild
-			}, AddAggregatesFromValues(aggFields...))
-		} else {
-			bridge.Include(q, func(qChild Query) { childQ = qChild })
-		}
-
-		childQ.Predicate(inc.Pageable.Predicate(isLastIndex))
-		q = childQ
-	}
-
-	if err := inc.Select.Apply(q, current); err != nil {
-		return nil, err
-	}
-
 	if ps, err := inc.Filters.Predicate(current); err != nil {
 		return nil, err
 	} else if len(ps) > 0 {
@@ -79,15 +60,47 @@ func (inc *Include) Apply(q Query, node Node) (Query, error) {
 		preds = append(preds, ps...)
 	}
 
-	if len(preds) > 0 {
-		q.Predicate(preds...)
-	}
-
-	if err := inc.Includes.Apply(q, current); err != nil {
+	selectApply, err := inc.Select.PredicateApplicator(current)
+	if err != nil {
 		return nil, err
 	}
 
-	return q, nil
+	incApplies, err := inc.Includes.PredicateApplicators(current)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(q Query) {
+		var (
+			childQ        Query
+			hasAggregates = len(aggFields) > 0
+		)
+		for i, bridge := range bridges {
+			isLastIndex := len(bridges)-1 == i
+			childQ = nil
+
+			if isLastIndex && hasAggregates {
+				bridge.Include(q, func(qChild Query) {
+					childQ = qChild
+				}, AddAggregatesFromValues(aggFields...))
+			} else {
+				bridge.Include(q, func(qChild Query) { childQ = qChild })
+			}
+
+			childQ.Predicate(inc.Limit.Predicate())
+			q = childQ
+		}
+
+		if len(preds) > 0 {
+			q.Predicate(preds...)
+		}
+
+		for _, apply := range incApplies {
+			apply(q)
+		}
+
+		selectApply(q)
+	}, nil
 }
 
 func (inc *Include) ValidateAndPreprocess(cfg *IncludeConfig) error {
@@ -150,7 +163,7 @@ func (inc *Include) walkValidate(cfg *IncludeConfig, depth int, total *int) erro
 		}
 	}
 
-	inc.Pageable.Sanitize(cfg.PageableConfig)
+	inc.Limit.Sanitize(cfg.PageableConfig)
 
 	inc.preprocessed = true
 	return nil

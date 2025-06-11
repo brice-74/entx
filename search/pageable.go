@@ -4,22 +4,32 @@ import "entgo.io/ent/dialect/sql"
 
 func (p *Pageable) Predicate(useOffset bool) func(s *sql.Selector) {
 	return func(s *sql.Selector) {
-		s.Limit(p.Limit)
+		s.Limit(p.Limit.Limit)
 		if useOffset && p.Page > 1 {
-			s.Offset((p.Page - 1) * p.Limit)
+			s.Offset((p.Page - 1) * p.Limit.Limit)
 		}
 	}
 }
 
 func (p *Pageable) Sanitize(c *PageableConfig) {
-	if p.Limit <= 0 {
-		p.Limit = c.DefaultLimit
-	}
-	if p.Limit > c.MaxLimit {
-		p.Limit = c.MaxLimit
-	}
+	p.Limit.Sanitize(c)
 	if p.Page < 1 {
 		p.Page = 1
+	}
+}
+
+func (l *Limit) Predicate() func(s *sql.Selector) {
+	return func(s *sql.Selector) {
+		s.Limit(l.Limit)
+	}
+}
+
+func (l *Limit) Sanitize(c *PageableConfig) {
+	if l.Limit <= 0 {
+		l.Limit = c.DefaultLimit
+	}
+	if l.Limit > c.MaxLimit {
+		l.Limit = c.MaxLimit
 	}
 }
 
