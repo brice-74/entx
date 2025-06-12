@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"maps"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -121,30 +123,58 @@ func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeRes
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(c.conf.MaxParallelWorkersPerRequest)
 
-	for _, txGroup := range txGroups {
-		txGroup.ToJob(c.client)
+	var txGroupsJobs = make([]TransactionJob, 0, len(txGroups))
+	for i, g := range txGroups {
+		txGroupsJobs[i] = g.ToJob(i, c.client)
 	}
+
+	txGroupsRes := RunJobs(wgctx, txGroupsJobs, wg, 5*time.Second)
+
+	var aggChunkedGroupsJobs = make([]ScalarJob, 0, len(aggChunkedGroups))
+	for i, g := range aggChunkedGroups {
+		aggChunkedGroupsJobs[i] = g.ToJob(i, c.client)
+	}
+
+	aggRes := RunJobs(wgctx, aggChunkedGroupsJobs, wg, 5*time.Second)
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
 
-	return &CompositeResponse{Searches: searches, Meta: GlobalAggregatesMeta{aggregates}}, nil
+	var (
+		searchesRes   = make(map[string]*SearchResponse, totalSearches)
+		aggregatesRes = make(map[string]any, totalAggregates)
+	)
+	for _, res := range txGroupsRes {
+		maps.Copy(searchesRes, res.Searches)
+		maps.Copy(aggregatesRes, res.Aggregates)
+	}
+
+	for _, res := range aggRes {
+		maps.Copy(aggregatesRes, res)
+	}
+
+	return &CompositeResponse{Searches: searchesRes, Meta: GlobalAggregatesMeta{aggregatesRes}}, nil
 }
+
+type ScalarJob = Job[int, map[string]any]
 
 type ScalarGroup []*ScalarQuery
 
-func (g ScalarGroup) ToJob(client Client) Job[map[string]any] {
-	return Job[map[string]any]{
+func (g ScalarGroup) ToJob(key int, client Client) ScalarJob {
+	return ScalarJob{
+		Key: key,
 		Exec: func(ctx context.Context) (map[string]any, error) {
 			return ExecuteScalars(ctx, client, g...)
 		},
 	}
 }
 
+type TransactionJob = Job[int, *TransactionGroupResponse]
+
 type TransactionGroupResponse struct {
 	Searches   map[string]*SearchResponse
-	Aggregates GlobalAggregatesMeta
+	Aggregates map[string]any
 }
 
 type TransactionGroup struct {
@@ -153,8 +183,9 @@ type TransactionGroup struct {
 	Aggregates     []*ScalarQuery
 }
 
-func (g *TransactionGroup) ToJob(client Client) Job[*TransactionGroupResponse] {
-	return Job[*TransactionGroupResponse]{
+func (g *TransactionGroup) ToJob(key int, client Client) TransactionJob {
+	return TransactionJob{
+		Key: key,
 		Exec: func(ctx context.Context) (*TransactionGroupResponse, error) {
 			return WithTx(ctx, client, g.IsolationLevel,
 				func(client Client) (*TransactionGroupResponse, error) {
@@ -165,9 +196,7 @@ func (g *TransactionGroup) ToJob(client Client) Job[*TransactionGroupResponse] {
 					}
 
 					if length := len(g.Aggregates); length > 0 {
-						res.Aggregates = AggregatesMeta{
-							Aggregates: make(map[string]any, length),
-						}
+						res.Aggregates = make(map[string]any, length)
 					}
 
 					scalarQueries := g.Aggregates
@@ -213,9 +242,7 @@ func (g *TransactionGroup) ToJob(client Client) Job[*TransactionGroupResponse] {
 						sr.Meta.Paginate = p.Calculate(int(count), sr.Meta.Count)
 					}
 
-					res.Aggregates = AggregatesMeta{
-						Aggregates: scalarRes,
-					}
+					res.Aggregates = scalarRes
 
 					return &res, nil
 				},
@@ -224,35 +251,43 @@ func (g *TransactionGroup) ToJob(client Client) Job[*TransactionGroupResponse] {
 	}
 }
 
-type Job[R any] struct {
+type Job[K comparable, R any] struct {
+	Key  K
 	Exec func(ctx context.Context) (R, error)
 }
 
-func RunJob[R any](
+func RunJobs[K comparable, R any](
 	ctx context.Context,
-	job Job[R],
+	jobs []Job[K, R],
 	wg *errgroup.Group,
 	timeout time.Duration,
-) R {
-	var result R
+) map[K]R {
+	results := make(map[K]R, len(jobs))
+	var mu sync.Mutex
 
-	if ctx.Err() != nil {
-		return result
-	}
-
-	wg.Go(func() (err error) {
-		ctx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		result, err = job.Exec(ctx)
-		if err != nil {
-			return err
+	for _, job := range jobs {
+		job := job
+		if ctx.Err() != nil {
+			break
 		}
 
-		return nil
-	})
+		wg.Go(func() error {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
 
-	return result
+			res, err := job.Exec(ctx)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			results[job.Key] = res
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	return results
 }
 
 type SliceAlias[T any] interface {
