@@ -24,8 +24,8 @@ func NewClient(c *ent.Client) *Client {
    return &Client{c}
 }
 
-func (c *Client) Tx(ctx context.Context, isolation stdsql.IsolationLevel) (search.Transaction, search.Client, error) {
-	tx, err := c.Client.BeginTx(ctx, &sql.TxOptions{Isolation: isolation})
+func (c *Client) Tx(ctx context.Context, opts *stdsql.TxOptions) (search.Transaction, search.Client, error) {
+	tx, err := c.Client.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, nil, err
 	}

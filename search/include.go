@@ -6,10 +6,10 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-func (incs Includes) PredicateApplicators(node Node) ([]func(Query), error) {
+func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
 	var applies = make([]func(Query), 0, len(incs))
 	for i, inc := range incs {
-		applicator, err := inc.PredicateApplicator(node)
+		applicator, err := inc.PredicateQ(node)
 		if err != nil {
 			return nil, err
 		}
@@ -18,7 +18,7 @@ func (incs Includes) PredicateApplicators(node Node) ([]func(Query), error) {
 	return applies, nil
 }
 
-func (inc *Include) PredicateApplicator(node Node) (func(Query), error) {
+func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 	if !inc.preprocessed {
 		panic("Include.Apply: called before preprocess")
 	}
@@ -60,12 +60,12 @@ func (inc *Include) PredicateApplicator(node Node) (func(Query), error) {
 		preds = append(preds, ps...)
 	}
 
-	selectApply, err := inc.Select.PredicateApplicator(current)
+	selectApply, err := inc.Select.PredicateQ(current)
 	if err != nil {
 		return nil, err
 	}
 
-	incApplies, err := inc.Includes.PredicateApplicators(current)
+	incApplies, err := inc.Includes.PredicateQs(current)
 	if err != nil {
 		return nil, err
 	}

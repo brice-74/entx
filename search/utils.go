@@ -128,12 +128,12 @@ func contextTimeout(parent context.Context, timeout time.Duration) (context.Cont
 func WithTx[T any](
 	ctx context.Context,
 	client Client,
-	isolationLevel stdsql.IsolationLevel,
-	fn func(client Client) (T, error),
+	txOpts *stdsql.TxOptions,
+	fn func(ctx context.Context, client Client) (T, error),
 ) (T, error) {
 	var zero T
 
-	tx, clientTx, err := client.Tx(ctx, isolationLevel)
+	tx, clientTx, err := client.Tx(ctx, txOpts)
 	if err != nil {
 		return zero, err
 	}
@@ -142,7 +142,7 @@ func WithTx[T any](
 			panic(rollback(tx, err))
 		}
 	}()
-	res, err := fn(clientTx)
+	res, err := fn(ctx, clientTx)
 	if err != nil {
 		return zero, rollback(tx, err)
 	}
@@ -159,9 +159,21 @@ func rollback(tx Transaction, err error) error {
 	return err
 }
 
-func DivCeil(numerator, denominator int) int {
-	if denominator == 0 {
-		panic("division by zero")
+type SliceAlias[T any] interface {
+	~[]T
+}
+
+func splitInChunks[SliceT SliceAlias[ElemT], ElemT any](input SliceT, batchSize int) []SliceT {
+	if batchSize <= 0 || batchSize >= len(input) {
+		if len(input) == 0 {
+			return nil
+		}
+		return []SliceT{input}
 	}
-	return (numerator + denominator - 1) / denominator
+	var chunks []SliceT
+	for i := 0; i < len(input); i += batchSize {
+		end := min(i+batchSize, len(input))
+		chunks = append(chunks, input[i:end])
+	}
+	return chunks
 }

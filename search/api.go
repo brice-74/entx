@@ -22,7 +22,7 @@ type (
 		GetEntityClient(Node) (EntityClient, error)
 		MustGetEntityClient(Node) EntityClient
 		QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error)
-		Tx(ctx context.Context, isolation stdsql.IsolationLevel) (Transaction, Client, error)
+		Tx(ctx context.Context, opts *stdsql.TxOptions) (Transaction, Client, error)
 	}
 
 	EntityClient interface {
@@ -114,7 +114,7 @@ type (
 
 	RequestBundle struct {
 		Transactions   []TransactionRequest `json:"transactions,omitempty"`
-		ParralelGroups [][]OverallAggregate `json:"parralel_groups,omitempty"`
+		ParallelGroups [][]OverallAggregate `json:"parallel_groups,omitempty"`
 		CompositeRequest
 	}
 

@@ -2,7 +2,6 @@ package search
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
@@ -93,12 +92,12 @@ func (qo *QueryOptions) Prepare(
 		return
 	}
 
-	selectApply, err := qo.Select.PredicateApplicator(node)
+	selectApply, err := qo.Select.PredicateQ(node)
 	if err != nil {
 		return
 	}
 
-	incApplies, err := qo.Includes.PredicateApplicators(node)
+	incApplies, err := qo.Includes.PredicateQs(node)
 	if err != nil {
 		return
 	}
@@ -129,7 +128,7 @@ func (qo *QueryOptions) Prepare(
 	return
 }
 
-func (s Select) PredicateApplicator(node Node) (func(q Query), error) {
+func (s Select) PredicateQ(node Node) (func(q Query), error) {
 	if len(s) > 0 {
 		for i, v := range s {
 			f := node.FieldByName(v)
@@ -171,10 +170,6 @@ func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Select
 	return sel, nil
 }
 
-// ------------------------------
-// Validations
-// ------------------------------
-
 func (qo *QueryOptions) ValidateAndPreprocess(c *Config) error {
 	var err error
 	if err = qo.Filters.ValidateAndPreprocess(&c.FilterConfig); err != nil {
@@ -191,99 +186,4 @@ func (qo *QueryOptions) ValidateAndPreprocess(c *Config) error {
 	}
 	qo.Pageable.Sanitize(&c.PageableConfig)
 	return nil
-}
-
-func (r *RequestBundle) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
-	if len(r.Transactions) > 0 && !c.Transaction.EnableClientGroupsInput {
-		return 0, 0, &ValidationError{
-			Rule: "TransactionGroupsInputDisable",
-			Err:  errors.New("transactions groups usage is not allowed"),
-		}
-	}
-
-	totalAgg, totalSearch := 0, 0
-
-	agg, search, err := r.CompositeRequest.ValidateAndPreprocess(c)
-	if err != nil {
-		return 0, 0, err
-	}
-	totalAgg += agg
-	totalSearch += search
-
-	for i := range r.Transactions {
-		agg, search, err := r.Transactions[i].ValidateAndPreprocess(c)
-		if err != nil {
-			return 0, 0, err
-		}
-		totalAgg += agg
-		totalSearch += search
-	}
-
-	for i1 := range r.ParralelGroups {
-		for i2 := range r.ParralelGroups[i1] {
-			if err = r.ParralelGroups[i1][i2].ValidateAndPreprocess(&c.FilterConfig); err != nil {
-				return 0, 0, err
-			}
-			totalAgg++
-		}
-	}
-
-	if c.MaxAggregatesPerRequest != 0 && totalAgg > c.MaxAggregatesPerRequest {
-		return 0, 0, &ValidationError{
-			Rule: "MaxAggregatesPerBundle",
-			Err:  fmt.Errorf("found %d aggregates in bundle, but the maximum allowed is %d", totalAgg, c.MaxAggregatesPerRequest),
-		}
-	}
-	if c.MaxSearchesPerRequest != 0 && totalSearch > c.MaxSearchesPerRequest {
-		return 0, 0, &ValidationError{
-			Rule: "MaxSearchesPerBundle",
-			Err:  fmt.Errorf("found %d searches in bundle, but the maximum allowed is %d", totalSearch, c.MaxSearchesPerRequest),
-		}
-	}
-
-	return totalAgg, totalSearch, nil
-}
-
-func (tr *TransactionRequest) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
-	if len(tr.Searches)+len(tr.Aggregates) <= 1 {
-		return 0, 0, &ValidationError{
-			Rule: "TransactionUnnecessary",
-			Err:  errors.New("transaction with a single search or one aggregate is unnecessary"),
-		}
-	}
-	if tr.TransactionIsolationLevel != nil && !c.Transaction.AllowClientIsolationLevel {
-		return 0, 0, &ValidationError{
-			Rule: "TransactionClientIsolationLevelDisallow",
-			Err:  errors.New("transaction_isolation_level parameter is not allowed"),
-		}
-	}
-	return tr.CompositeRequest.ValidateAndPreprocess(c)
-}
-
-func (sr *CompositeRequest) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
-	if c.MaxAggregatesPerRequest != 0 && len(sr.Aggregates) > c.MaxAggregatesPerRequest {
-		return 0, 0, &ValidationError{
-			Rule: "MaxAggregatesPerRequest",
-			Err:  fmt.Errorf("found %d aggregates, but the maximum allowed is %d", len(sr.Aggregates), c.MaxAggregatesPerRequest),
-		}
-	}
-	if c.MaxSearchesPerRequest != 0 && len(sr.Searches) > c.MaxSearchesPerRequest {
-		return 0, 0, &ValidationError{
-			Rule: "MaxSearchesPerRequest",
-			Err:  fmt.Errorf("found %d searches, but the maximum allowed is %d", len(sr.Searches), c.MaxSearchesPerRequest),
-		}
-	}
-
-	for i := range sr.Aggregates {
-		if err = sr.Aggregates[i].ValidateAndPreprocess(&c.FilterConfig); err != nil {
-			return 0, 0, err
-		}
-	}
-	for i := range sr.Searches {
-		if err = sr.Searches[i].ValidateAndPreprocess(c); err != nil {
-			return 0, 0, err
-		}
-	}
-
-	return len(sr.Aggregates), len(sr.Searches), nil
 }
