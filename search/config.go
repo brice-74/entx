@@ -74,9 +74,8 @@ type TransactionConfig struct {
 type Config struct {
 	Transaction TransactionConfig
 	// Timeouts
-	RequestTimeout     time.Duration
-	SearchQueryTimeout time.Duration
-	ScalarQueryTimeout time.Duration
+	RequestTimeout time.Duration
+	JobTimeout     time.Duration
 	// Batch sizing
 	ScalarQueriesChunkSize       int
 	MaxParallelWorkersPerRequest int
@@ -90,13 +89,13 @@ type Config struct {
 	AggregateConfig
 }
 
-func NewConfig(opts ...Option) Config {
+func NewConfig(opts ...Option) *Config {
 	cfg := defaultConf
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
-	return *cfg.BindDeeply()
+	return cfg.BindDeeply()
 }
 
 func (cfg *Config) BindDeeply() *Config {
@@ -105,6 +104,12 @@ func (cfg *Config) BindDeeply() *Config {
 	cfg.IncludeConfig.PageableConfig = &cfg.PageableConfig
 	cfg.AggregateConfig.FilterConfig = &cfg.FilterConfig
 	return cfg
+}
+
+func WithTransactionConfig(cfg TransactionConfig) Option {
+	return func(c *Config) {
+		c.Transaction = cfg
+	}
 }
 
 // ------------------------------
@@ -118,17 +123,10 @@ func WithRequestTimeout(d time.Duration) Option {
 	}
 }
 
-// WithSearchQueryTimeout sets the timeout for search queries.
-func WithSearchQueryTimeout(d time.Duration) Option {
+// WithJobTimeout sets the timeout for search queries.
+func WithJobTimeout(d time.Duration) Option {
 	return func(c *Config) {
-		c.SearchQueryTimeout = d
-	}
-}
-
-// WithScalarQueryTimeout sets the timeout for scalar queries.
-func WithScalarQueryTimeout(d time.Duration) Option {
-	return func(c *Config) {
-		c.ScalarQueryTimeout = d
+		c.JobTimeout = d
 	}
 }
 
@@ -168,169 +166,32 @@ func WithMaxSearchesPerRequest(max int) Option {
 	}
 }
 
-// ------------------------------
-// PageableConfig
-// ------------------------------
-
-// WithMaxLimit sets the maximum number of items allowed per page.
-func WithMaxLimit(max int) Option {
+func WithPageableConfig(cfg PageableConfig) Option {
 	return func(c *Config) {
-		c.PageableConfig.MaxLimit = max
+		c.PageableConfig = cfg
 	}
 }
 
-// WithDefaultLimit sets the default number of items per page if none is specified.
-func WithDefaultLimit(def int) Option {
+func WithSortConfig(cfg SortConfig) Option {
 	return func(c *Config) {
-		c.PageableConfig.DefaultLimit = def
+		c.SortConfig = cfg
 	}
 }
 
-// ------------------------------
-// SortConfig
-// ------------------------------
-
-// WithMaxSortRelationDepth sets the maximum allowed nesting depth for sorting fields.
-func WithMaxSortRelationDepth(depth int) Option {
+func WithFilterConfig(cfg FilterConfig) Option {
 	return func(c *Config) {
-		c.SortConfig.MaxSortRelationDepth = depth
+		c.FilterConfig = cfg
 	}
 }
 
-// ------------------------------
-// FilterConfig
-// ------------------------------
-
-// WithMaxFilterTreeCount sets the maximum number of Filter nodes allowed in a single filter tree.
-func WithMaxFilterTreeCount(count int) Option {
+func WithIncludeConfig(cfg IncludeConfig) Option {
 	return func(c *Config) {
-		c.FilterConfig.MaxFilterTreeCount = count
+		c.IncludeConfig = cfg
 	}
 }
 
-// WithMaxRelationChainDepth sets the maximum depth allowed per filter (relation+field).
-func WithMaxRelationChainDepth(depth int) Option {
+func WithAggregateConfig(cfg AggregateConfig) Option {
 	return func(c *Config) {
-		c.FilterConfig.MaxRelationChainDepth = depth
-	}
-}
-
-// WithMaxRelationTotalCount sets the total number of relation segments permitted across the entire filter tree.
-func WithMaxRelationTotalCount(count int) Option {
-	return func(c *Config) {
-		c.FilterConfig.MaxRelationTotalCount = count
-	}
-}
-
-// ------------------------------
-// AggregateConfig
-// ------------------------------
-
-// WithMaxAggregateRelationDepth sets the maximum depth (field chain segments) allowed for an aggregate’s target field.
-func WithMaxAggregateRelationDepth(depth int) Option {
-	return func(c *Config) {
-		c.AggregateConfig.MaxAggregateRelationDepth = depth
-	}
-}
-
-// WithAggregateFilterMaxTreeCount sets the maximum Filter nodes allowed inside an Aggregate.
-func WithAggregateFilterMaxTreeCount(count int) Option {
-	return func(c *Config) {
-		c.AggregateConfig.FilterConfig.MaxFilterTreeCount = count
-	}
-}
-
-// WithAggregateFilterMaxRelationChainDepth sets the maximum (relation+field) depth inside an Aggregate’s filters.
-func WithAggregateFilterMaxRelationChainDepth(depth int) Option {
-	return func(c *Config) {
-		c.AggregateConfig.FilterConfig.MaxRelationChainDepth = depth
-	}
-}
-
-// WithAggregateFilterMaxRelationTotalCount sets the total relation segments allowed in Aggregate’s filter tree.
-func WithAggregateFilterMaxRelationTotalCount(count int) Option {
-	return func(c *Config) {
-		c.AggregateConfig.FilterConfig.MaxRelationTotalCount = count
-	}
-}
-
-// ------------------------------
-// IncludeConfig
-// ------------------------------
-
-// WithMaxIncludeTreeCount sets the total number of Include nodes allowed in one include tree.
-func WithMaxIncludeTreeCount(count int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.MaxIncludeTreeCount = count
-	}
-}
-
-// WithMaxIncludeRelationDepth sets the maximum depth of the relation chain allowed per Include.
-func WithMaxIncludeRelationDepth(depth int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.MaxIncludeRelationDepth = depth
-	}
-}
-
-// WithIncludeFilterMaxTreeCount sets the maximum Filter nodes allowed inside any Include.
-func WithIncludeFilterMaxTreeCount(count int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.FilterConfig.MaxFilterTreeCount = count
-	}
-}
-
-// WithIncludeFilterMaxRelationChainDepth sets the maximum (relation+field) depth for filters inside Includes.
-func WithIncludeFilterMaxRelationChainDepth(depth int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.FilterConfig.MaxRelationChainDepth = depth
-	}
-}
-
-// WithIncludeFilterMaxRelationTotalCount sets the total relation segments allowed in Include’s filter trees.
-func WithIncludeFilterMaxRelationTotalCount(count int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.FilterConfig.MaxRelationTotalCount = count
-	}
-}
-
-// WithIncludeAggregateMaxRelationDepth sets the maximum field-chain depth for aggregates inside Includes.
-func WithIncludeAggregateMaxRelationDepth(depth int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.AggregateConfig.MaxAggregateRelationDepth = depth
-	}
-}
-
-// WithIncludeAggregateFilterMaxTreeCount sets the maximum Filter nodes allowed in aggregates inside Includes.
-func WithIncludeAggregateFilterMaxTreeCount(count int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.AggregateConfig.FilterConfig.MaxFilterTreeCount = count
-	}
-}
-
-// WithIncludeAggregateFilterMaxRelationChainDepth sets the max (relation+field) depth for filters inside Include’s aggregates.
-func WithIncludeAggregateFilterMaxRelationChainDepth(depth int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.AggregateConfig.FilterConfig.MaxRelationChainDepth = depth
-	}
-}
-
-// WithIncludeAggregateFilterMaxRelationTotalCount sets the total relation segments allowed in Include’s aggregate filters.
-func WithIncludeAggregateFilterMaxRelationTotalCount(count int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.AggregateConfig.FilterConfig.MaxRelationTotalCount = count
-	}
-}
-
-// WithIncludePageableMaxLimit sets the maximum limit for pagination inside Includes.
-func WithIncludePageableMaxLimit(max int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.PageableConfig.MaxLimit = max
-	}
-}
-
-// WithIncludePageableDefaultLimit sets the default limit for pagination inside Includes.
-func WithIncludePageableDefaultLimit(def int) Option {
-	return func(c *Config) {
-		c.IncludeConfig.PageableConfig.DefaultLimit = def
+		c.AggregateConfig = cfg
 	}
 }

@@ -75,7 +75,10 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 
 	_, field, bridges, err := resolveChain(node, s.fieldParts)
 	if err != nil {
-		return nil, err
+		return nil, &QueryBuildError{
+			Op:  "Sort.Predicate",
+			Err: err,
+		}
 	}
 
 	if field == "" {

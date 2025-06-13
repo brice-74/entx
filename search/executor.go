@@ -3,30 +3,29 @@ package search
 import (
 	"context"
 	"maps"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
 
-type Composite struct {
+type Executor struct {
 	graph  Graph
 	client Client
 	cfg    *Config
 }
 
-func NewComposite(
+func NewExecutor(
 	graph Graph,
 	client Client,
 	cfg *Config,
-) *Composite {
-	return &Composite{
+) *Executor {
+	return &Executor{
 		graph,
 		client,
 		cfg,
 	}
 }
 
-func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeResponse, error) {
+func (c *Executor) QueryBundle(ctx context.Context, req QueryBundleInterface) (*BundleResponse, error) {
 	ctx, cancel := contextTimeout(ctx, c.cfg.RequestTimeout)
 	defer cancel()
 
@@ -41,7 +40,7 @@ func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeRes
 	}
 
 	var (
-		txGroupsRes []*TransactionGroupResponse
+		txGroupsRes []*TxGroupJobResponse
 		scalarRes   []map[string]any
 	)
 
@@ -49,26 +48,28 @@ func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeRes
 	wg.SetLimit(c.cfg.MaxParallelWorkersPerRequest)
 
 	if lenght := len(txGroups); lenght > 0 {
-		var jobs = make([]TransactionJob, 0, lenght)
+		var jobs = make([]TxGroupJob, 0, lenght)
 		for i, g := range txGroups {
 			jobs[i] = g.ToJob(c.client)
 		}
 
-		txGroupsRes = RunJobs(wgctx, jobs, wg, 5*time.Second)
+		txGroupsRes = RunJobs(wgctx, jobs, wg, c.cfg.JobTimeout)
 	}
 
 	if lenght := len(scalarGroups); lenght > 0 {
-		var jobs = make([]ScalarJob, 0, lenght)
+		var jobs = make([]ScalarGroupJob, 0, lenght)
 		for i, g := range scalarGroups {
 			jobs[i] = g.ToJob(c.client)
 		}
 
-		scalarRes = RunJobs(wgctx, jobs, wg, 5*time.Second)
+		scalarRes = RunJobs(wgctx, jobs, wg, c.cfg.JobTimeout)
 	}
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
+
+	bundleRes := BundleResponse{}
 
 	var (
 		searchesRes   = make(map[string]*SearchResponse, totalSearches)
@@ -83,22 +84,13 @@ func (c *Composite) Exec(ctx context.Context, req *RequestBundle) (*CompositeRes
 		maps.Copy(aggregatesRes, res)
 	}
 
-	return &CompositeResponse{Searches: searchesRes, Meta: GlobalAggregatesMeta{aggregatesRes}}, nil
-}
-
-type Jobifiable[R any] interface {
-	ToJob(Client) Job[R]
-}
-
-func iterRun[R any, J Jobifiable[R]](js []J) R {
-	if lenght := len(js); lenght > 0 {
-		var jobs = make([]Job[R], 0, lenght)
-		for i, j := range js {
-			jobs[i] = j.ToJob()
-		}
-
-		return RunJobs(wgctx, jobs, wg, 5*time.Second)
+	if len(searchesRes) > 0 {
+		bundleRes.Searches = searchesRes
 	}
-	var zero R
-	return zero
+
+	if len(aggregatesRes) > 0 {
+		bundleRes.Meta = &GlobalAggregatesMeta{aggregatesRes}
+	}
+
+	return &bundleRes, nil
 }

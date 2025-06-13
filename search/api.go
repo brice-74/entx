@@ -109,21 +109,73 @@ const (
 
 type (
 	// ------------------------------
+	// Input Interfaces
+	// ------------------------------
+
+	validateWithCounts interface {
+		ValidateAndPreprocess(c *Config) (countAggregates int, countSearches int, err error)
+	}
+
+	QueryBundleInterface interface {
+		validateWithCounts
+		PrepareGroups(*Config, Graph) (
+			txGroups []JobifiableTxGroup,
+			scalarGroups []JobifiableScalarGroup,
+			err error,
+		)
+	}
+
+	TxQueryGroupInterface interface {
+		validateWithCounts
+		PrepareTxGroup(*Config, Graph) (*TxGroup, error)
+	}
+
+	QueryGroupInterface interface {
+		validateWithCounts
+		Prepare(*Config, Graph) (
+			searches []*NamedQueryBuild,
+			aggregates ScalarGroup,
+			err error,
+		)
+	}
+
+	validate interface {
+		ValidateAndPreprocess(*Config) error
+	}
+
+	NamedQueryInterface interface {
+		validate
+		Prepare(uniqueIndex int, c *Config, g Graph) (*NamedQueryBuild, error)
+	}
+
+	TargetedQueryInterface interface {
+		validate
+		Prepare(*Config, Graph) (*QueryOptionsBuild, error)
+	}
+
+	QueryOptionsInterface interface {
+		validate
+		Prepare(*Config, Node) (*QueryOptionsBuild, error)
+	}
+)
+
+type (
+	// ------------------------------
 	// Input Types
 	// ------------------------------
 
-	RequestBundle struct {
-		Transactions   []TransactionRequest `json:"transactions,omitempty"`
+	QueryBundle struct {
+		Transactions   []TxQueryGroup       `json:"transactions,omitempty"`
 		ParallelGroups [][]OverallAggregate `json:"parallel_groups,omitempty"`
-		CompositeRequest
+		QueryGroup
 	}
 
-	TransactionRequest struct {
+	TxQueryGroup struct {
 		TransactionIsolationLevel *int `json:"transaction_isolation_level,omitempty"`
-		CompositeRequest
+		QueryGroup
 	}
 
-	CompositeRequest struct {
+	QueryGroup struct {
 		Searches   []NamedQuery       `json:"searches,omitempty"`
 		Aggregates []OverallAggregate `json:"aggregates,omitempty"`
 	}
@@ -249,12 +301,12 @@ type (
 	GlobalAggregatesMeta = AggregatesMeta
 
 	SearchResponse struct {
-		Data any        `json:"data,omitempty"`
-		Meta SearchMeta `json:"meta,omitempty"`
+		Data any         `json:"data,omitempty"`
+		Meta *SearchMeta `json:"meta,omitempty"`
 	}
 
-	CompositeResponse struct {
+	BundleResponse struct {
 		Searches map[string]*SearchResponse `json:"searches,omitempty"`
-		Meta     GlobalAggregatesMeta       `json:"meta,omitempty"`
+		Meta     *GlobalAggregatesMeta      `json:"meta,omitempty"`
 	}
 )

@@ -246,7 +246,7 @@ func (a *Aggregate) ValidateAndPreprocess(cfg *AggregateConfig) error {
 	return nil
 }
 
-func (a *OverallAggregate) resolveField(registry map[string]Node) (node Node, field string, err error) {
+func (a *OverallAggregate) resolveField(registry Graph) (node Node, field string, err error) {
 	node = registry[a.fieldParts[0]]
 	if node == nil {
 		err = &QueryBuildError{

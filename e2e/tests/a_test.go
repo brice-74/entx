@@ -10,18 +10,12 @@ import (
 )
 
 func TestXxx(t *testing.T) {
-	req := search.HubRequest{
-		Searches: []search.WithKey{
-			{
-				Key: "",
-			},
-		},
-	}
+	req := search.QueryBundle{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	if res, err := hub.Exec(ctx, &req); assert.NoError(t, err) {
+	if res, err := executor.QueryBundle(ctx, &req); assert.NoError(t, err) {
 
 	}
 }
