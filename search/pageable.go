@@ -2,6 +2,11 @@ package search
 
 import "entgo.io/ent/dialect/sql"
 
+type Pageable struct {
+	Page int `json:"page,omitempty"`
+	Limit
+}
+
 func (p *Pageable) Predicate(useOffset bool) func(s *sql.Selector) {
 	return func(s *sql.Selector) {
 		s.Limit(p.Limit.Limit)
@@ -16,6 +21,10 @@ func (p *Pageable) Sanitize(c *PageableConfig) {
 	if p.Page < 1 {
 		p.Page = 1
 	}
+}
+
+type Limit struct {
+	Limit int `json:"limit,omitempty"`
 }
 
 func (l *Limit) Predicate() func(s *sql.Selector) {
@@ -40,6 +49,15 @@ type CompositePaginateInfos struct {
 
 func (p *CompositePaginateInfos) ToScalarQuery() *ScalarQuery {
 	return p.PaginateInfos.ToScalarQuery(p.Key)
+}
+
+type PaginateResponse struct {
+	From        int `json:"from"`
+	To          int `json:"to"`
+	Total       int `json:"total"`
+	CurrentPage int `json:"current_page"`
+	LastPage    int `json:"last_page"`
+	PerPage     int `json:"per_page"`
 }
 
 type PaginateInfos struct {

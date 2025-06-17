@@ -6,6 +6,23 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+type Operator string
+
+const (
+	OpEqual        Operator = "="
+	OpNotEqual     Operator = "!="
+	OpGreaterThan  Operator = ">"
+	OpGreaterEqual Operator = ">="
+	OpLessThan     Operator = "<"
+	OpLessEqual    Operator = "<="
+	OpLike         Operator = "LIKE"
+	OpNotLike      Operator = "NOT LIKE"
+	OpIn           Operator = "IN"
+	OpNotIn        Operator = "NOT IN"
+)
+
+type Filters []Filter
+
 func (fs Filters) Predicate(node Node) ([]func(*sql.Selector), error) {
 	if len(fs) == 0 {
 		return nil, nil
@@ -20,6 +37,48 @@ func (fs Filters) Predicate(node Node) ([]func(*sql.Selector), error) {
 		preds[i] = pred
 	}
 	return preds, nil
+}
+
+func (fs Filters) ValidateAndPreprocess(cfg *FilterConfig) error {
+	if cfg == nil {
+		cfg = &FilterConfig{}
+	}
+	var (
+		totalFilters   int
+		totalRelations int
+	)
+	for i := range fs {
+		if err := fs[i].walkValidate(cfg.MaxRelationChainDepth, 0, &totalFilters, &totalRelations); err != nil {
+			return err
+		}
+	}
+	if cfg.MaxFilterTreeCount > 0 && totalFilters > cfg.MaxFilterTreeCount {
+		return &ValidationError{
+			Rule: "MaxFilterTreeCount",
+			Err:  fmt.Errorf("filters count exceeds max %d", cfg.MaxFilterTreeCount),
+		}
+	}
+	if cfg.MaxRelationTotalCount > 0 && totalRelations > cfg.MaxRelationTotalCount {
+		return &ValidationError{
+			Rule: "MaxFilterRelationsPerTree",
+			Err:  fmt.Errorf("relations count exceeds max %d", cfg.MaxRelationTotalCount),
+		}
+	}
+	return nil
+}
+
+type Filter struct {
+	Not      *Filter  `json:"not,omitempty"`
+	And      Filters  `json:"and,omitempty"`
+	Or       Filters  `json:"or,omitempty"`
+	Relation string   `json:"relation,omitempty"`
+	Field    string   `json:"field,omitempty"`
+	Operator Operator `json:"operator,omitempty"`
+	Value    any      `json:"value,omitempty"`
+	// pre-processed segments
+	relationParts []string
+	fieldParts    []string
+	preprocessed  bool
 }
 
 func (f *Filter) Predicate(node Node) (func(*sql.Selector), error) {
@@ -163,34 +222,6 @@ func buildBasePredicate(
 	default:
 		return nil, fmt.Errorf("invalid operator %q", op)
 	}
-}
-
-func (fs Filters) ValidateAndPreprocess(cfg *FilterConfig) error {
-	if cfg == nil {
-		cfg = &FilterConfig{}
-	}
-	var (
-		totalFilters   int
-		totalRelations int
-	)
-	for i := range fs {
-		if err := fs[i].walkValidate(cfg.MaxRelationChainDepth, 0, &totalFilters, &totalRelations); err != nil {
-			return err
-		}
-	}
-	if cfg.MaxFilterTreeCount > 0 && totalFilters > cfg.MaxFilterTreeCount {
-		return &ValidationError{
-			Rule: "MaxFilterTreeCount",
-			Err:  fmt.Errorf("filters count exceeds max %d", cfg.MaxFilterTreeCount),
-		}
-	}
-	if cfg.MaxRelationTotalCount > 0 && totalRelations > cfg.MaxRelationTotalCount {
-		return &ValidationError{
-			Rule: "MaxFilterRelationsPerTree",
-			Err:  fmt.Errorf("relations count exceeds max %d", cfg.MaxRelationTotalCount),
-		}
-	}
-	return nil
 }
 
 func (f *Filter) ValidateAndPreprocess(cfg *FilterConfig) error {

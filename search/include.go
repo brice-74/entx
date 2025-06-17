@@ -6,6 +6,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+type Includes []Include
+
 func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
 	var applies = make([]func(Query), 0, len(incs))
 	for i, inc := range incs {
@@ -16,6 +18,38 @@ func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
 		applies[i] = applicator
 	}
 	return applies, nil
+}
+
+func (incs Includes) ValidateAndPreprocess(cfg *IncludeConfig) error {
+	if cfg == nil {
+		cfg = &IncludeConfig{}
+	}
+	total := 0
+	for i := range incs {
+		if err := incs[i].walkValidate(cfg, 0, &total); err != nil {
+			return err
+		}
+	}
+	if cfg.MaxIncludeTreeCount > 0 && total > cfg.MaxIncludeTreeCount {
+		return &ValidationError{
+			Rule: "MaxIncludeTreeCount",
+			Err:  fmt.Errorf("includes count exceeds max %d", cfg.MaxIncludeTreeCount),
+		}
+	}
+	return nil
+}
+
+type Include struct {
+	Relation   string     `json:"relation"`
+	Select     Select     `json:"select,omitempty"`
+	Filters    Filters    `json:"filters,omitempty"`
+	Includes   Includes   `json:"includes,omitempty"`
+	Sort       Sorts      `json:"sort,omitempty"`
+	Aggregates Aggregates `json:"aggregates,omitempty"`
+	Limit
+	// pre-processed segments
+	relationParts []string
+	preprocessed  bool
 }
 
 func (inc *Include) PredicateQ(node Node) (func(Query), error) {
@@ -105,25 +139,6 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 
 func (inc *Include) ValidateAndPreprocess(cfg *IncludeConfig) error {
 	return Includes{*inc}.ValidateAndPreprocess(cfg)
-}
-
-func (incs Includes) ValidateAndPreprocess(cfg *IncludeConfig) error {
-	if cfg == nil {
-		cfg = &IncludeConfig{}
-	}
-	total := 0
-	for i := range incs {
-		if err := incs[i].walkValidate(cfg, 0, &total); err != nil {
-			return err
-		}
-	}
-	if cfg.MaxIncludeTreeCount > 0 && total > cfg.MaxIncludeTreeCount {
-		return &ValidationError{
-			Rule: "MaxIncludeTreeCount",
-			Err:  fmt.Errorf("includes count exceeds max %d", cfg.MaxIncludeTreeCount),
-		}
-	}
-	return nil
 }
 
 func (inc *Include) walkValidate(cfg *IncludeConfig, depth int, total *int) error {

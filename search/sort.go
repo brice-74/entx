@@ -9,6 +9,15 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
+type Direction string
+
+const (
+	DirASC  Direction = "ASC"
+	DirDESC Direction = "DESC"
+)
+
+type Sorts []*Sort
+
 func (ss Sorts) Predicate(node Node) ([]func(*sql.Selector), error) {
 	lenSorts := len(ss)
 	if lenSorts == 0 {
@@ -24,6 +33,24 @@ func (ss Sorts) Predicate(node Node) ([]func(*sql.Selector), error) {
 		preds = append(preds, pred)
 	}
 	return preds, nil
+}
+
+func (ss Sorts) ValidateAndPreprocess(cfg *SortConfig) error {
+	for i := range ss {
+		if err := ss[i].ValidateAndPreprocess(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type Sort struct {
+	Field     string    `json:"field"`
+	Direction Direction `json:"direction,omitempty"`
+	Aggregate Agg       `json:"aggregate,omitempty"`
+	// pre-processed segments
+	fieldParts   []string
+	preprocessed bool
 }
 
 func (s *Sort) dirBuilder() (func(string) string, error) {
@@ -158,15 +185,6 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 			sel.OrderBy(direction(sub.C(field)))
 		}
 	}, nil
-}
-
-func (ss Sorts) ValidateAndPreprocess(cfg *SortConfig) error {
-	for i := range ss {
-		if err := ss[i].ValidateAndPreprocess(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Sort) ValidateAndPreprocess(cfg *SortConfig) error {

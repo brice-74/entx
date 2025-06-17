@@ -7,6 +7,27 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+type Agg string
+
+const (
+	AggAvg   Agg = "avg"
+	AggSum   Agg = "sum"
+	AggMin   Agg = "min"
+	AggMax   Agg = "max"
+	AggCount Agg = "count"
+)
+
+type BaseAggregate struct {
+	Field    string  `json:"field"`
+	Alias    string  `json:"alias,omitempty"`
+	Type     Agg     `json:"type"`
+	Distinct bool    `json:"distinct,omitempty"`
+	Filters  Filters `json:"filters,omitempty"`
+	// pre-processed segments
+	fieldParts   []string
+	preprocessed bool
+}
+
 // buildExpr builds the aggregate function, expression, and alias.
 func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 	fn func(string) string, expr string, alias string, err error,
@@ -130,6 +151,10 @@ func applyBridgesInverseJoins(sel *sql.Selector, bridges []Bridge, base *sql.Sel
 	return prev, nil
 }
 
+type Aggregate struct {
+	BaseAggregate
+}
+
 func (a *Aggregate) Predicate(root Node) (func(*sql.Selector), string, error) {
 	if !a.preprocessed {
 		panic("Aggregate.Predicate: called before preprocess")
@@ -197,6 +222,8 @@ func (a *Aggregate) Predicate(root Node) (func(*sql.Selector), string, error) {
 	return modifier, alias, nil
 }
 
+type Aggregates []Aggregate
+
 func (as Aggregates) Predicate(node Node) ([]func(*sql.Selector), []string, error) {
 	lenAggregates := len(as)
 	if lenAggregates == 0 {
@@ -244,6 +271,10 @@ func (a *Aggregate) ValidateAndPreprocess(cfg *AggregateConfig) error {
 		}
 	}
 	return nil
+}
+
+type OverallAggregate struct {
+	BaseAggregate
 }
 
 func (a *OverallAggregate) resolveField(registry Graph) (node Node, field string, err error) {

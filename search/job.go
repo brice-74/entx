@@ -53,6 +53,24 @@ func RunJobs[R any](
 	return results
 }
 
+func IterRunJobs[R any](
+	ctx context.Context,
+	jobifiables []Jobifiable[R],
+	wg *errgroup.Group,
+	timeout time.Duration,
+	client Client,
+) []R {
+	if lenght := len(jobifiables); lenght > 0 {
+		var jobs = make([]Job[R], 0, lenght)
+		for i, g := range jobifiables {
+			jobs[i] = g.ToJob(client)
+		}
+
+		return RunJobs(ctx, jobs, wg, timeout)
+	}
+	return nil
+}
+
 type ScalarGroup []*ScalarQuery
 
 type ScalarGroupJob = Job[map[string]any]
