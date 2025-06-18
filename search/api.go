@@ -17,8 +17,5 @@ type (
 		Count    int               `json:"count,omitempty"`
 	}
 
-	SearchResponse struct {
-		Data any         `json:"data,omitempty"`
-		Meta *SearchMeta `json:"meta,omitempty"`
-	}
+	/* --------------------------------- */
 )

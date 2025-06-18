@@ -14,6 +14,30 @@ type ScalarQuery struct {
 	Dest     any           // destination pointer, destinations that implement the driver.Valuer are processed.
 }
 
+func ExecuteScalar(ctx context.Context, client Client, scalar *ScalarQuery) (any, error) {
+	query, args := sql.SelectExpr(scalar.Selector).Query()
+	rows, err := client.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, fmt.Errorf("ExecuteScalars: no rows returned")
+	}
+	if err := rows.Scan(scalar.Dest); err != nil {
+		return nil, err
+	}
+	v, ok := scalar.Dest.(driver.Valuer)
+	if ok {
+		val, err := v.Value()
+		if err != nil {
+			return nil, err
+		}
+		return val, nil
+	}
+	return scalar.Dest, nil
+}
+
 // Execute constructs and executes a query such as :
 //
 //	SELECT
@@ -23,8 +47,14 @@ type ScalarQuery struct {
 //
 // and scans directly into Dest.
 func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery) (map[string]any, error) {
-	if len(scalars) <= 0 {
+	if l := len(scalars); l <= 0 {
 		return nil, fmt.Errorf("ExecuteScalars: empty scalars input")
+	} else if l == 1 {
+		res, err := ExecuteScalar(ctx, client, scalars[0])
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{scalars[0].Key: res}, nil
 	}
 
 	sel := sql.Select()

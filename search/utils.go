@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	stdsql "database/sql"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"golang.org/x/sync/errgroup"
 )
 
 type EntityHandler func(entities []Entity) error
@@ -123,6 +125,61 @@ func contextTimeout(parent context.Context, timeout time.Duration) (context.Cont
 		return context.WithTimeout(parent, timeout)
 	}
 	return parent, noopFn
+}
+
+func WithSingleGoErrGroup[T any](
+	ctx context.Context,
+	wg *errgroup.Group,
+	timeout time.Duration,
+	fn func(context.Context) (T, error),
+) (res T) {
+	if ctx.Err() != nil {
+		return
+	}
+	wg.Go(func() (err error) {
+		ctx, cancel := contextTimeout(ctx, timeout)
+		defer cancel()
+
+		res, err = fn(ctx)
+		if err != nil {
+			return
+		}
+		return
+	})
+	return
+}
+
+func WithGoErrGroup[T any](
+	ctx context.Context,
+	wg *errgroup.Group,
+	timeout time.Duration,
+	funcs []func(context.Context) (T, error),
+) []T {
+	results := make([]T, len(funcs))
+	var mu sync.Mutex
+
+	for i, exec := range funcs {
+		if ctx.Err() != nil {
+			break
+		}
+
+		wg.Go(func() error {
+			ctx, cancel := contextTimeout(ctx, timeout)
+			defer cancel()
+
+			res, err := exec(ctx)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			results[i] = res
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	return results
 }
 
 func WithTx[T any](

@@ -3,8 +3,12 @@ package search
 import (
 	"context"
 	"fmt"
+	"time"
+
+	stdsql "database/sql"
 
 	"entgo.io/ent/dialect/sql"
+	"golang.org/x/sync/errgroup"
 )
 
 type NamedQueryBuild struct {
@@ -41,6 +45,27 @@ type TargetedQuery struct {
 	QueryOptions
 }
 
+func (q *TargetedQuery) Execute(
+	ctx context.Context,
+	client Client,
+	graph Graph,
+	cfg *Config,
+) (*SearchResponse, error) {
+	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
+
+	if err := q.ValidateAndPreprocess(cfg); err != nil {
+		return nil, err
+	}
+
+	build, err := q.Prepare(cfg, graph)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.QueryOptions.execute(ctx, client, cfg, build)
+}
+
 func (q *TargetedQuery) Prepare(
 	conf *Config,
 	registry Graph,
@@ -56,11 +81,6 @@ func (q *TargetedQuery) Prepare(
 	return q.QueryOptions.Prepare(conf, node)
 }
 
-type QueryOptionsBuild struct {
-	ExecFn   func(context.Context, Client) (any, int, error)
-	Paginate *PaginateInfos
-}
-
 type QueryOptions struct {
 	Select         Select     `json:"select,omitempty"`
 	Filters        Filters    `json:"filters,omitempty"`
@@ -68,31 +88,143 @@ type QueryOptions struct {
 	Sort           Sorts      `json:"sort,omitempty"`
 	Aggregates     Aggregates `json:"aggregates,omitempty"`
 	WithPagination bool       `json:"with_pagination,omitempty"`
+	// enable transaction between query and pagination
+	EnableTransaction *bool `json:"enable_transaction,omitempty"`
+	// has no effect in a TxQueryGroup
+	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
 	Pageable
 }
 
-/*
-	 func (qo *QueryOptions) Execute(
-		ctx context.Context,
-		client Client,
-		node Node,
-		cfg *Config,
+type SearchResponse struct {
+	Data any         `json:"data,omitempty"`
+	Meta *SearchMeta `json:"meta,omitempty"`
+}
 
-	) (*QueryOptionsBuild, error) {
-		ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
-		defer cancel()
+func (qo *QueryOptions) Execute(
+	ctx context.Context,
+	client Client,
+	node Node,
+	cfg *Config,
+) (*SearchResponse, error) {
+	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
 
-		if err := qo.ValidateAndPreprocess(cfg); err != nil {
-			return nil, err
+	if err := qo.ValidateAndPreprocess(cfg); err != nil {
+		return nil, err
+	}
+
+	build, err := qo.Prepare(cfg, node)
+	if err != nil {
+		return nil, err
+	}
+
+	return qo.execute(ctx, client, cfg, build)
+}
+
+func (qo *QueryOptions) execute(
+	ctx context.Context,
+	client Client,
+	cfg *Config,
+	build *QueryOptionsBuild,
+) (*SearchResponse, error) {
+	if build.Paginate != nil {
+		if build.EnableTransaction {
+			// run synchronously search query & count paginate in the same transaction
+			return qo.runTx(ctx, client, build, cfg.Transaction.Timeout)
 		}
+		// run asynchronously search query & count paginate inside 2 goroutines
+		return qo.runGo(ctx, client, build, cfg.QueryTimeout)
+	}
+	// run search directly
+	data, count, err := build.ExecFn(ctx, client)
+	if err != nil {
+		return nil, err
+	}
 
-		build, err := qo.Prepare(cfg, node)
+	return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
+}
+
+func (qo *QueryOptions) runGo(
+	ctx context.Context,
+	client Client,
+	build *QueryOptionsBuild,
+	timeout time.Duration,
+) (*SearchResponse, error) {
+	wg, wgctx := errgroup.WithContext(ctx)
+	wg.SetLimit(2)
+
+	res := WithSingleGoErrGroup(wgctx, wg, timeout, func(ctx context.Context) (*SearchResponse, error) {
+		data, count, err := build.ExecFn(ctx, client)
 		if err != nil {
 			return nil, err
 		}
 
+		return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
+	})
+
+	raw := WithSingleGoErrGroup(wgctx, wg, timeout, func(ctx context.Context) (any, error) {
+		return ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+	})
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	total, ok := raw.(int64)
+	if !ok {
+		return nil, fmt.Errorf("paginate count wrong type: %T", raw)
+	}
+
+	res.Meta.Paginate = build.Paginate.Calculate(int(total), res.Meta.Count)
+
+	return res, nil
 }
-*/
+
+func (qo *QueryOptions) runTx(
+	ctx context.Context,
+	client Client,
+	build *QueryOptionsBuild,
+	timeout time.Duration,
+) (*SearchResponse, error) {
+	ctx, cancel := contextTimeout(ctx, timeout)
+	defer cancel()
+
+	return WithTx(ctx, client, &stdsql.TxOptions{
+		ReadOnly:  true,
+		Isolation: build.TransactionIsolationLevel,
+	}, func(ctx context.Context, client Client) (*SearchResponse, error) {
+		data, count, err := build.ExecFn(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+
+		raw, err := ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+		if err != nil {
+			return nil, err
+		}
+
+		total, ok := raw.(int64)
+		if !ok {
+			return nil, fmt.Errorf("paginate count wrong type: %T", raw)
+		}
+
+		return &SearchResponse{
+			Data: data,
+			Meta: &SearchMeta{
+				Count:    count,
+				Paginate: build.Paginate.Calculate(int(total), count),
+			},
+		}, nil
+	})
+}
+
+type QueryOptionsBuild struct {
+	ExecFn                    func(context.Context, Client) (any, int, error)
+	Paginate                  *PaginateInfos
+	EnableTransaction         bool
+	TransactionIsolationLevel stdsql.IsolationLevel
+}
+
 func (qo *QueryOptions) Prepare(
 	conf *Config,
 	node Node,
@@ -163,7 +295,17 @@ func (qo *QueryOptions) Prepare(
 	}
 
 	res := QueryOptionsBuild{
-		ExecFn: execute,
+		ExecFn:                    execute,
+		EnableTransaction:         conf.Transaction.EnablePaginateQuery,
+		TransactionIsolationLevel: conf.Transaction.IsolationLevel,
+	}
+
+	if qo.EnableTransaction != nil {
+		res.EnableTransaction = *qo.EnableTransaction
+	}
+
+	if qo.TransactionIsolationLevel != nil {
+		res.TransactionIsolationLevel = *qo.TransactionIsolationLevel
 	}
 
 	if countSel != nil {

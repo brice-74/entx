@@ -51,6 +51,7 @@ type Option func(*Config)
 // defaultConf is the configuration with the fewest restrictions to make the hub functional.
 var defaultConf = Config{
 	Transaction: TransactionConfig{
+		EnablePaginateQuery:       true,
 		EnableClientGroupsInput:   true,
 		AllowClientIsolationLevel: true,
 	},
@@ -58,14 +59,16 @@ var defaultConf = Config{
 		MaxLimit:     100,
 		DefaultLimit: 25,
 	},
-	ScalarQueriesChunkSize:       5,
+	ScalarQueriesChunkSize:       6,
 	MaxParallelWorkersPerRequest: -1,
 }
 
 var DefaultConf = *defaultConf.BindDeeply()
 
 type TransactionConfig struct {
-	IsolationLevel sql.IsolationLevel
+	IsolationLevel      sql.IsolationLevel
+	EnablePaginateQuery bool
+	Timeout             time.Duration
 	// Client input permissions
 	EnableClientGroupsInput   bool
 	AllowClientIsolationLevel bool
@@ -75,7 +78,7 @@ type Config struct {
 	Transaction TransactionConfig
 	// Timeouts
 	RequestTimeout time.Duration
-	JobTimeout     time.Duration
+	QueryTimeout   time.Duration
 	// Batch sizing
 	ScalarQueriesChunkSize       int
 	MaxParallelWorkersPerRequest int
@@ -120,13 +123,6 @@ func WithTransactionConfig(cfg TransactionConfig) Option {
 func WithRequestTimeout(d time.Duration) Option {
 	return func(c *Config) {
 		c.RequestTimeout = d
-	}
-}
-
-// WithJobTimeout sets the timeout for search queries.
-func WithJobTimeout(d time.Duration) Option {
-	return func(c *Config) {
-		c.JobTimeout = d
 	}
 }
 

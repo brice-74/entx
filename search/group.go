@@ -7,7 +7,7 @@ import (
 )
 
 type TxQueryGroup struct {
-	TransactionIsolationLevel *int `json:"transaction_isolation_level,omitempty"`
+	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
 	QueryGroup
 }
 
@@ -17,7 +17,7 @@ func (r *TxQueryGroup) PrepareTxGroup(conf *Config, graph Graph) (
 ) {
 	group = new(TxGroup)
 	if r.TransactionIsolationLevel != nil {
-		group.IsolationLevel = stdsql.IsolationLevel(*r.TransactionIsolationLevel)
+		group.IsolationLevel = *r.TransactionIsolationLevel
 	} else {
 		group.IsolationLevel = conf.Transaction.IsolationLevel
 	}

@@ -16,6 +16,29 @@ type Jobifiable[R any] interface {
 
 type Job[R any] func(ctx context.Context) (R, error)
 
+func RunJob[R any](
+	ctx context.Context,
+	job Job[R],
+	wg *errgroup.Group,
+	timeout time.Duration,
+) (res R) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	wg.Go(func() (err error) {
+		ctx, cancel := contextTimeout(ctx, timeout)
+		defer cancel()
+
+		res, err = job(ctx)
+		if err != nil {
+			return
+		}
+		return
+	})
+	return
+}
+
 func RunJobs[R any](
 	ctx context.Context,
 	jobs []Job[R],
@@ -72,9 +95,7 @@ func IterRunJobs[R any](
 }
 
 type ScalarGroup []*ScalarQuery
-
 type ScalarGroupJob = Job[map[string]any]
-
 type JobifiableScalarGroup = Jobifiable[map[string]any]
 
 func (g ScalarGroup) ToJob(client Client) ScalarGroupJob {
@@ -83,19 +104,33 @@ func (g ScalarGroup) ToJob(client Client) ScalarGroupJob {
 	}
 }
 
+/* ------------------- */
+
+type StandaloneSearchJob = Job[*SearchResponse]
+type StandaloneSearch func(context.Context, Client) (any, int, error)
+
+func (fn StandaloneSearch) ToJob(client Client) StandaloneSearchJob {
+	return func(ctx context.Context) (*SearchResponse, error) {
+		data, count, err := fn(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+		return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
+	}
+}
+
+/* ------------------- */
+
 type TxGroup struct {
 	IsolationLevel sql.IsolationLevel
 	Searches       []*NamedQueryBuild
 	Aggregates     []*ScalarQuery
 }
-
 type TxGroupJobResponse struct {
 	Searches   map[string]*SearchResponse
 	Aggregates map[string]any
 }
-
 type TxGroupJob = Job[*TxGroupJobResponse]
-
 type JobifiableTxGroup = Jobifiable[*TxGroupJobResponse]
 
 func (g *TxGroup) ToJob(client Client) TxGroupJob {
