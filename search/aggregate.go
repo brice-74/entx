@@ -1,10 +1,12 @@
 package search
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"entgo.io/ent/dialect/sql"
+	"golang.org/x/sync/errgroup"
 )
 
 type Agg string
@@ -367,4 +369,66 @@ func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error
 		}
 	}
 	return nil
+}
+
+type AggregatesResponse = map[string]any
+
+type OverallAggregates []OverallAggregate
+
+func (oas OverallAggregates) Execute(
+	ctx context.Context,
+	client Client,
+	graph Graph,
+	cfg *Config,
+) (AggregatesResponse, error) {
+	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
+
+	count, err := oas.ValidateAndPreprocess(&cfg.FilterConfig)
+	if err != nil || count == 0 {
+		return nil, err
+	}
+
+	scalars, err := oas.PrepareScalars(graph)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := splitInChunks(scalars, cfg.ScalarQueriesChunkSize)
+
+	wg, wgctx := errgroup.WithContext(ctx)
+	wg.SetLimit(min(len(chunks), cfg.MaxParallelWorkersPerRequest))
+
+	res := executeScalarGroupsWg(wgctx, client, cfg, wg, count, chunks...)
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (oas OverallAggregates) PrepareScalars(graph Graph) ([]*ScalarQuery, error) {
+	if length := len(oas); length > 0 {
+		var scalars = make([]*ScalarQuery, 0, length)
+
+		for i := range oas {
+			s, err := oas[i].PrepareScalar(graph)
+			if err != nil {
+				return nil, err
+			}
+			scalars[i] = s
+		}
+	}
+	return nil, nil
+}
+
+func (oas OverallAggregates) ValidateAndPreprocess(cfg *FilterConfig) (count int, err error) {
+	for i := range oas {
+		if err = oas[i].ValidateAndPreprocess(cfg); err != nil {
+			return
+		}
+		count++
+	}
+	return
 }

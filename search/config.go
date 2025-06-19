@@ -52,7 +52,6 @@ type Option func(*Config)
 var defaultConf = Config{
 	Transaction: TransactionConfig{
 		EnablePaginateQuery:       true,
-		EnableClientGroupsInput:   true,
 		AllowClientIsolationLevel: true,
 	},
 	PageableConfig: PageableConfig{
@@ -70,15 +69,15 @@ type TransactionConfig struct {
 	EnablePaginateQuery bool
 	Timeout             time.Duration
 	// Client input permissions
-	EnableClientGroupsInput   bool
 	AllowClientIsolationLevel bool
 }
 
 type Config struct {
 	Transaction TransactionConfig
 	// Timeouts
-	RequestTimeout time.Duration
-	QueryTimeout   time.Duration
+	RequestTimeout   time.Duration // includes a global call to an Execute method
+	QueryTimeout     time.Duration // only on search queries
+	AggregateTimeout time.Duration // includes pagination counts and aggregations
 	// Batch sizing
 	ScalarQueriesChunkSize       int
 	MaxParallelWorkersPerRequest int

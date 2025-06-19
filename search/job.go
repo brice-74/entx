@@ -1,5 +1,6 @@
 package search
 
+/*
 import (
 	"context"
 	"database/sql"
@@ -103,23 +104,6 @@ func (g ScalarGroup) ToJob(client Client) ScalarGroupJob {
 		return ExecuteScalars(ctx, client, g...)
 	}
 }
-
-/* ------------------- */
-
-type StandaloneSearchJob = Job[*SearchResponse]
-type StandaloneSearch func(context.Context, Client) (any, int, error)
-
-func (fn StandaloneSearch) ToJob(client Client) StandaloneSearchJob {
-	return func(ctx context.Context) (*SearchResponse, error) {
-		data, count, err := fn(ctx, client)
-		if err != nil {
-			return nil, err
-		}
-		return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
-	}
-}
-
-/* ------------------- */
 
 type TxGroup struct {
 	IsolationLevel sql.IsolationLevel
@@ -248,3 +232,4 @@ func (g *TxGroup) attachPagination(
 	}
 	return nil
 }
+*/

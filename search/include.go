@@ -54,7 +54,7 @@ type Include struct {
 
 func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 	if !inc.preprocessed {
-		panic("Include.Apply: called before preprocess")
+		panic("Include.PredicateQ: called before preprocess")
 	}
 	current := node
 	var bridges = make([]Bridge, 0, len(inc.relationParts))
@@ -62,7 +62,7 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 		bridge := current.Bridge(rel)
 		if bridge == nil {
 			return nil, &QueryBuildError{
-				Op:  "Include.Apply",
+				Op:  "Include.PredicateQ",
 				Err: fmt.Errorf("relation %q not found on node %q", rel, current.Name()),
 			}
 		}

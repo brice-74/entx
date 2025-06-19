@@ -3,7 +3,6 @@ package search
 import (
 	"context"
 	"fmt"
-	"time"
 
 	stdsql "database/sql"
 
@@ -26,7 +25,7 @@ func (q *NamedQuery) Prepare(uniqueIndex int, conf *Config, graph Graph) (
 	error,
 ) {
 	if q.Key == "" {
-		q.Key = fmt.Sprintf("s%d", uniqueIndex+1)
+		q.Key = fmt.Sprintf("search_%d", uniqueIndex+1)
 	}
 
 	build, err := q.TargetedQuery.Prepare(conf, graph)
@@ -63,7 +62,7 @@ func (q *TargetedQuery) Execute(
 		return nil, err
 	}
 
-	return q.QueryOptions.execute(ctx, client, cfg, build)
+	return q.QueryOptions.executeStandalone(ctx, client, cfg, build)
 }
 
 func (q *TargetedQuery) Prepare(
@@ -88,11 +87,16 @@ type QueryOptions struct {
 	Sort           Sorts      `json:"sort,omitempty"`
 	Aggregates     Aggregates `json:"aggregates,omitempty"`
 	WithPagination bool       `json:"with_pagination,omitempty"`
-	// enable transaction between query and pagination
+	// Enable transaction between query and pagination. Has no effect if WithPagination is set to false.
 	EnableTransaction *bool `json:"enable_transaction,omitempty"`
-	// has no effect in a TxQueryGroup
+	// Has no effect if there is no pagination and if EnableTransaction is set to false or in a TxQueryGroup.
 	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
 	Pageable
+}
+
+type SearchMeta struct {
+	Paginate *PaginateResponse `json:"paginate,omitempty"`
+	Count    int               `json:"count,omitempty"`
 }
 
 type SearchResponse struct {
@@ -118,10 +122,10 @@ func (qo *QueryOptions) Execute(
 		return nil, err
 	}
 
-	return qo.execute(ctx, client, cfg, build)
+	return qo.executeStandalone(ctx, client, cfg, build)
 }
 
-func (qo *QueryOptions) execute(
+func (qo *QueryOptions) executeStandalone(
 	ctx context.Context,
 	client Client,
 	cfg *Config,
@@ -130,12 +134,15 @@ func (qo *QueryOptions) execute(
 	if build.Paginate != nil {
 		if build.EnableTransaction {
 			// run synchronously search query & count paginate in the same transaction
-			return qo.runTx(ctx, client, build, cfg.Transaction.Timeout)
+			return qo.runTx(ctx, client, build, cfg)
 		}
 		// run asynchronously search query & count paginate inside 2 goroutines
-		return qo.runGo(ctx, client, build, cfg.QueryTimeout)
+		return qo.runGo(ctx, client, build, cfg)
 	}
-	// run search directly
+	// run search without pagination
+	ctx, cancel := contextTimeout(ctx, cfg.QueryTimeout)
+	defer cancel()
+
 	data, count, err := build.ExecFn(ctx, client)
 	if err != nil {
 		return nil, err
@@ -148,12 +155,12 @@ func (qo *QueryOptions) runGo(
 	ctx context.Context,
 	client Client,
 	build *QueryOptionsBuild,
-	timeout time.Duration,
+	cfg *Config,
 ) (*SearchResponse, error) {
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(2)
 
-	res := WithSingleGoErrGroup(wgctx, wg, timeout, func(ctx context.Context) (*SearchResponse, error) {
+	res := GoWithTimeout(wgctx, wg, cfg.QueryTimeout, func(ctx context.Context) (*SearchResponse, error) {
 		data, count, err := build.ExecFn(ctx, client)
 		if err != nil {
 			return nil, err
@@ -162,7 +169,7 @@ func (qo *QueryOptions) runGo(
 		return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
 	})
 
-	raw := WithSingleGoErrGroup(wgctx, wg, timeout, func(ctx context.Context) (any, error) {
+	raw := GoWithTimeout(wgctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (any, error) {
 		return ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
 	})
 
@@ -184,9 +191,9 @@ func (qo *QueryOptions) runTx(
 	ctx context.Context,
 	client Client,
 	build *QueryOptionsBuild,
-	timeout time.Duration,
+	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := contextTimeout(ctx, timeout)
+	ctx, cancel := contextTimeout(ctx, cfg.Transaction.Timeout)
 	defer cancel()
 
 	return WithTx(ctx, client, &stdsql.TxOptions{
@@ -365,7 +372,7 @@ func (s Select) PredicateQ(node Node) (func(q Query), error) {
 			f := node.FieldByName(v)
 			if f == nil {
 				return nil, &QueryBuildError{
-					Op:  "Include.Apply",
+					Op:  "Select.PredicateQ",
 					Err: fmt.Errorf("node %q has no field named %q", node.Name(), v),
 				}
 			}

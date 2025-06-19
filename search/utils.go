@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -127,7 +128,7 @@ func contextTimeout(parent context.Context, timeout time.Duration) (context.Cont
 	return parent, noopFn
 }
 
-func WithSingleGoErrGroup[T any](
+func GoWithTimeout[T any](
 	ctx context.Context,
 	wg *errgroup.Group,
 	timeout time.Duration,
@@ -149,7 +150,7 @@ func WithSingleGoErrGroup[T any](
 	return
 }
 
-func WithGoErrGroup[T any](
+func GoBatchWithTimeout[T any](
 	ctx context.Context,
 	wg *errgroup.Group,
 	timeout time.Duration,
@@ -233,4 +234,76 @@ func splitInChunks[SliceT SliceAlias[ElemT], ElemT any](input SliceT, batchSize 
 		chunks = append(chunks, input[i:end])
 	}
 	return chunks
+}
+
+func executeScalarGroupsWg(
+	ctx context.Context,
+	client Client,
+	cfg *Config,
+	wg *errgroup.Group,
+	count int,
+	scalarGroups ...[]*ScalarQuery,
+) map[string]any {
+	if len(scalarGroups) == 0 {
+		return nil
+	}
+
+	finalRes := make(map[string]any, count)
+	for _, group := range scalarGroups {
+		switch len(group) {
+		case 0:
+		case 1:
+			res := GoWithTimeout(ctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (any, error) {
+				return ExecuteScalar(ctx, client, group[0])
+			})
+			finalRes[group[0].Key] = res
+		default:
+			res := GoWithTimeout(ctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (map[string]any, error) {
+				return ExecuteScalars(ctx, client, group...)
+			})
+			maps.Copy(finalRes, res)
+		}
+	}
+	return finalRes
+}
+
+func executeScalarGroups(
+	ctx context.Context,
+	client Client,
+	cfg *Config,
+	count int,
+	scalarGroups ...[]*ScalarQuery,
+) (map[string]any, error) {
+	if len(scalarGroups) == 0 {
+		return nil, nil
+	}
+
+	finalRes := make(map[string]any, count)
+	for _, group := range scalarGroups {
+		switch len(group) {
+		case 0:
+		case 1:
+			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			defer cancel()
+
+			res, err := ExecuteScalar(ctx, client, group[0])
+			if err != nil {
+				return nil, err
+			}
+
+			finalRes[group[0].Key] = res
+		default:
+			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			defer cancel()
+
+			res, err := ExecuteScalars(ctx, client, group...)
+			if err != nil {
+				return nil, err
+			}
+
+			maps.Copy(finalRes, res)
+		}
+	}
+
+	return finalRes, nil
 }

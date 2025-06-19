@@ -47,9 +47,9 @@ func ExecuteScalar(ctx context.Context, client Client, scalar *ScalarQuery) (any
 //
 // and scans directly into Dest.
 func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery) (map[string]any, error) {
-	if l := len(scalars); l <= 0 {
-		return nil, fmt.Errorf("ExecuteScalars: empty scalars input")
-	} else if l == 1 {
+	if length := len(scalars); length <= 0 {
+		return nil, nil
+	} else if length == 1 {
 		res, err := ExecuteScalar(ctx, client, scalars[0])
 		if err != nil {
 			return nil, err

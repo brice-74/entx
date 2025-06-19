@@ -2,157 +2,75 @@ package search
 
 import (
 	"context"
+	"database/sql"
+	stdsql "database/sql"
 	"errors"
 	"fmt"
-	"maps"
-
-	"golang.org/x/sync/errgroup"
 )
 
-type GlobalAggregatesMeta = AggregatesMeta
-
-type BundleResponse struct {
-	Searches map[string]*SearchResponse `json:"searches,omitempty"`
-	Meta     *GlobalAggregatesMeta      `json:"meta,omitempty"`
-}
-
 type QueryBundle struct {
-	Transactions   []TxQueryGroup       `json:"transactions,omitempty"`
-	ParallelGroups [][]OverallAggregate `json:"parallel_groups,omitempty"`
+	Transactions   []TxQueryGroup      `json:"transactions,omitempty"`
+	ParallelGroups []OverallAggregates `json:"parallel_aggregates_groups,omitempty"`
 	QueryGroup
 }
 
-func (qb *QueryBundle) Execute(
+type AggregatesMeta struct {
+	Aggregates map[string]any `json:"aggregates,omitempty"`
+}
+
+type GroupResponse struct {
+	Searches map[string]*SearchResponse `json:"searches,omitempty"`
+	Meta     *AggregatesMeta            `json:"meta,omitempty"`
+}
+
+/* func (r *QueryBundle) Execute(
 	ctx context.Context,
 	client Client,
 	graph Graph,
 	cfg *Config,
-) (*BundleResponse, error) {
+) (*GroupResponse, error) {
 	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
-	totalAggregates, totalSearches, err := qb.ValidateAndPreprocess(cfg)
+	countAggregates, countSearches, err := r.ValidateAndPreprocess(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	txGroups, scalarGroups, err := qb.PrepareGroups(cfg, graph)
-	if err != nil {
-		return nil, err
-	}
-
-	wg, wgctx := errgroup.WithContext(ctx)
-	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
-
-	txGroupsRes := IterRunJobs(
-		wgctx, txGroups, wg, cfg.JobTimeout, client,
-	)
-
-	scalarRes := IterRunJobs(
-		wgctx, scalarGroups, wg, cfg.JobTimeout, client,
-	)
-
-	if err := wg.Wait(); err != nil {
-		return nil, err
-	}
-
-	bundleRes := BundleResponse{}
-
-	var (
-		searchesRes   = make(map[string]*SearchResponse, totalSearches)
-		aggregatesRes = make(map[string]any, totalAggregates)
-	)
-	for _, res := range txGroupsRes {
-		maps.Copy(searchesRes, res.Searches)
-		maps.Copy(aggregatesRes, res.Aggregates)
-	}
-
-	for _, res := range scalarRes {
-		maps.Copy(aggregatesRes, res)
-	}
-
-	if len(searchesRes) > 0 {
-		bundleRes.Searches = searchesRes
-	}
-
-	if len(aggregatesRes) > 0 {
-		bundleRes.Meta = &GlobalAggregatesMeta{aggregatesRes}
-	}
-
-	return &bundleRes, nil
 }
 
-func (rb *QueryBundle) PrepareGroups(cfg *Config, graph Graph) (
-	txGroups []JobifiableTxGroup,
-	scalarGroups []JobifiableScalarGroup,
-	err error,
-) {
-	// Prepare standalone searches and aggregates
-	searches, aggregates, err := rb.QueryGroup.Prepare(cfg, graph)
+func (r *QueryBundle) Prepare(cfg *Config, graph Graph) (*any, error) {
+	qgBuild, err := r.QueryGroup.Prepare(cfg, graph)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	// Build transaction groups: individual transactions + standalone searches
-	txCount := len(rb.Transactions)
-	searchCount := len(searches)
-
-	if totalTx := txCount + searchCount; totalTx > 0 {
-		txGroups = make([]JobifiableTxGroup, totalTx)
-		for i, tx := range rb.Transactions {
-			grp, err := tx.PrepareTxGroup(cfg, graph)
-			if err != nil {
-				return nil, nil, err
-			}
-			txGroups[i] = grp
-		}
-		for i, cs := range searches {
-			txGroups[txCount+i] = &TxGroup{
-				IsolationLevel: cfg.Transaction.IsolationLevel,
-				Searches:       []*NamedQueryBuild{cs},
-			}
+	qgBuildCountTx := 0
+	for _, build := range qgBuild.searches {
+		if build.Paginate != nil && build.EnableTransaction {
+			qgBuildCountTx++
 		}
 	}
 
-	// Build scalar (aggregate) groups: parallel groups + standalone aggregates
-	parallelCount := len(rb.ParallelGroups)
-	aggCount := len(aggregates)
-	chunkSize := cfg.ScalarQueriesChunkSize
-	chunkCount := (aggCount + chunkSize - 1) / chunkSize
-
-	if totalScalar := parallelCount + chunkCount; totalScalar > 0 {
-		scalarGroups = make([]JobifiableScalarGroup, totalScalar)
-		for i, grp := range rb.ParallelGroups {
-			scs := make(ScalarGroup, len(grp))
-			for j, a := range grp {
-				s, err := a.PrepareScalar(graph)
-				if err != nil {
-					return nil, nil, err
-				}
-				scs[j] = s
-			}
-			scalarGroups[i] = scs
-		}
-
-		if aggCount > 0 {
-			chunks := splitInChunks(aggregates, chunkSize)
-			for k, ch := range chunks {
-				scalarGroups[parallelCount+k] = ch
-			}
+	txBuilds := make([]*TxQueryGroupBuild, 0, len(r.Transactions)+qgBuildCountTx)
+	for _, build := range qgBuild.searches {
+		if build.Paginate != nil && build.EnableTransaction {
+			txBuilds
 		}
 	}
 
-	return txGroups, scalarGroups, nil
-}
+	indexLevel := len(txBuilds)
+	for i, t := range r.Transactions {
+		b, err := t.Prepare(cfg, graph)
+		if err != nil {
+			return nil, err
+		}
+		txBuilds[i] = b
+	}
+
+} */
 
 func (r *QueryBundle) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
-	if len(r.Transactions) > 0 && !c.Transaction.EnableClientGroupsInput {
-		return 0, 0, &ValidationError{
-			Rule: "TxGroupsInputDisable",
-			Err:  errors.New("transactions groups usage is not allowed"),
-		}
-	}
-
 	totalAgg, totalSearch := 0, 0
 
 	agg, search, err := r.QueryGroup.ValidateAndPreprocess(c)
@@ -171,13 +89,12 @@ func (r *QueryBundle) ValidateAndPreprocess(c *Config) (countAggregates, countSe
 		totalSearch += search
 	}
 
-	for i1 := range r.ParallelGroups {
-		for i2 := range r.ParallelGroups[i1] {
-			if err = r.ParallelGroups[i1][i2].ValidateAndPreprocess(&c.FilterConfig); err != nil {
-				return 0, 0, err
-			}
-			totalAgg++
+	for i := range r.ParallelGroups {
+		count, err := r.ParallelGroups[i].ValidateAndPreprocess(&c.FilterConfig)
+		if err != nil {
+			return 0, 0, err
 		}
+		totalAgg += count
 	}
 
 	if c.MaxAggregatesPerRequest != 0 && totalAgg > c.MaxAggregatesPerRequest {
@@ -194,4 +111,136 @@ func (r *QueryBundle) ValidateAndPreprocess(c *Config) (countAggregates, countSe
 	}
 
 	return totalAgg, totalSearch, nil
+}
+
+type TxQueryGroupBuild struct {
+	IsolationLevel sql.IsolationLevel
+	QueryGroupBuild
+}
+
+type TxQueryGroup struct {
+	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
+	QueryGroup
+}
+
+func (r *TxQueryGroup) Prepare(conf *Config, graph Graph) (*TxQueryGroupBuild, error) {
+	txBuild := new(TxQueryGroupBuild)
+	if r.TransactionIsolationLevel != nil {
+		txBuild.IsolationLevel = *r.TransactionIsolationLevel
+	} else {
+		txBuild.IsolationLevel = conf.Transaction.IsolationLevel
+	}
+
+	build, err := r.QueryGroup.Prepare(conf, graph)
+	if err != nil {
+		return nil, err
+	}
+
+	txBuild.QueryGroupBuild = *build
+
+	return txBuild, nil
+}
+
+func (tr *TxQueryGroup) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
+	if len(tr.Searches)+len(tr.Aggregates) <= 1 {
+		return 0, 0, &ValidationError{
+			Rule: "TransactionUnnecessary",
+			Err:  errors.New("transaction with a single search or one aggregate is unnecessary"),
+		}
+	}
+	if tr.TransactionIsolationLevel != nil && !c.Transaction.AllowClientIsolationLevel {
+		return 0, 0, &ValidationError{
+			Rule: "TransactionClientIsolationLevelDisallow",
+			Err:  errors.New("transaction_isolation_level parameter is not allowed"),
+		}
+	}
+	return tr.QueryGroup.ValidateAndPreprocess(c)
+}
+
+type ScalarGroup []*ScalarQuery
+
+type QueryGroupBuild struct {
+	Searches   []*NamedQueryBuild
+	Aggregates ScalarGroup
+}
+
+type QueryGroup struct {
+	Searches   []NamedQuery       `json:"searches,omitempty"`
+	Aggregates []OverallAggregate `json:"aggregates,omitempty"`
+}
+
+func (r *QueryGroup) Execute(
+	ctx context.Context,
+	client Client,
+	graph Graph,
+	cfg *Config,
+) (*GroupResponse, error) {
+	countSearches, countAggregates, err := r.ValidateAndPreprocess(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	build, err := r.Prepare(cfg, graph)
+	if err != nil {
+		return nil, err
+	}
+
+	build.Searches
+
+}
+
+func (r *QueryGroup) Prepare(conf *Config, graph Graph) (
+	build *QueryGroupBuild,
+	err error,
+) {
+	build = new(QueryGroupBuild)
+	if lenght := len(r.Searches); lenght > 0 {
+		searches := make([]*NamedQueryBuild, 0, lenght)
+		for i, s := range r.Searches {
+			searches[i], err = s.Prepare(i, conf, graph)
+			if err != nil {
+				return
+			}
+		}
+		build.Searches = searches
+	}
+	if lenght := len(r.Aggregates); lenght > 0 {
+		aggregates := make(ScalarGroup, 0, lenght)
+		for i, a := range r.Aggregates {
+			aggregates[i], err = a.PrepareScalar(graph)
+			if err != nil {
+				return
+			}
+		}
+		build.Aggregates = aggregates
+	}
+	return
+}
+
+func (sr *QueryGroup) ValidateAndPreprocess(c *Config) (countAggregates, countSearches int, err error) {
+	if c.MaxAggregatesPerRequest != 0 && len(sr.Aggregates) > c.MaxAggregatesPerRequest {
+		return 0, 0, &ValidationError{
+			Rule: "MaxAggregatesPerRequest",
+			Err:  fmt.Errorf("found %d aggregates, but the maximum allowed is %d", len(sr.Aggregates), c.MaxAggregatesPerRequest),
+		}
+	}
+	if c.MaxSearchesPerRequest != 0 && len(sr.Searches) > c.MaxSearchesPerRequest {
+		return 0, 0, &ValidationError{
+			Rule: "MaxSearchesPerRequest",
+			Err:  fmt.Errorf("found %d searches, but the maximum allowed is %d", len(sr.Searches), c.MaxSearchesPerRequest),
+		}
+	}
+
+	for i := range sr.Aggregates {
+		if err = sr.Aggregates[i].ValidateAndPreprocess(&c.FilterConfig); err != nil {
+			return 0, 0, err
+		}
+	}
+	for i := range sr.Searches {
+		if err = sr.Searches[i].ValidateAndPreprocess(c); err != nil {
+			return 0, 0, err
+		}
+	}
+
+	return len(sr.Aggregates), len(sr.Searches), nil
 }
