@@ -20,7 +20,7 @@ type NamedQuery struct {
 	TargetedQuery
 }
 
-func (q *NamedQuery) Prepare(uniqueIndex int, conf *Config, graph Graph) (
+func (q *NamedQuery) Build(uniqueIndex int, conf *Config, graph Graph) (
 	*NamedQueryBuild,
 	error,
 ) {
@@ -28,7 +28,7 @@ func (q *NamedQuery) Prepare(uniqueIndex int, conf *Config, graph Graph) (
 		q.Key = fmt.Sprintf("search_%d", uniqueIndex+1)
 	}
 
-	build, err := q.TargetedQuery.Prepare(conf, graph)
+	build, err := q.TargetedQuery.Build(conf, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -57,15 +57,15 @@ func (q *TargetedQuery) Execute(
 		return nil, err
 	}
 
-	build, err := q.Prepare(cfg, graph)
+	build, err := q.Build(cfg, graph)
 	if err != nil {
 		return nil, err
 	}
 
-	return q.QueryOptions.executeStandalone(ctx, client, cfg, build)
+	return q.QueryOptions.execute(ctx, client, cfg, build)
 }
 
-func (q *TargetedQuery) Prepare(
+func (q *TargetedQuery) Build(
 	conf *Config,
 	registry Graph,
 ) (*QueryOptionsBuild, error) {
@@ -77,7 +77,7 @@ func (q *TargetedQuery) Prepare(
 		}
 	}
 
-	return q.QueryOptions.Prepare(conf, node)
+	return q.QueryOptions.Build(conf, node)
 }
 
 type QueryOptions struct {
@@ -87,9 +87,9 @@ type QueryOptions struct {
 	Sort           Sorts      `json:"sort,omitempty"`
 	Aggregates     Aggregates `json:"aggregates,omitempty"`
 	WithPagination bool       `json:"with_pagination,omitempty"`
-	// Enable transaction between query and pagination. Has no effect if WithPagination is set to false.
-	EnableTransaction *bool `json:"enable_transaction,omitempty"`
-	// Has no effect if there is no pagination and if EnableTransaction is set to false or in a TxQueryGroup.
+	// Enable transaction between query and pagination.
+	// Has no effect if there is no pagination or in a TxQueryGroup.
+	EnableTransaction         *bool                  `json:"enable_transaction,omitempty"`
 	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
 	Pageable
 }
@@ -117,15 +117,15 @@ func (qo *QueryOptions) Execute(
 		return nil, err
 	}
 
-	build, err := qo.Prepare(cfg, node)
+	build, err := qo.Build(cfg, node)
 	if err != nil {
 		return nil, err
 	}
 
-	return qo.executeStandalone(ctx, client, cfg, build)
+	return qo.execute(ctx, client, cfg, build)
 }
 
-func (qo *QueryOptions) executeStandalone(
+func (qo *QueryOptions) execute(
 	ctx context.Context,
 	client Client,
 	cfg *Config,
@@ -160,31 +160,52 @@ func (qo *QueryOptions) runGo(
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(2)
 
-	res := GoWithTimeout(wgctx, wg, cfg.QueryTimeout, func(ctx context.Context) (*SearchResponse, error) {
+	var (
+		searchResponse *SearchResponse
+		paginateCount  int
+	)
+
+	wg.Go(func() (err error) {
+		ctx, cancel := contextTimeout(wgctx, cfg.QueryTimeout)
+		defer cancel()
+
 		data, count, err := build.ExecFn(ctx, client)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
+		searchResponse = &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}
+		return nil
 	})
 
-	raw := GoWithTimeout(wgctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (any, error) {
-		return ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+	wg.Go(func() (err error) {
+		ctx, cancel := contextTimeout(wgctx, cfg.AggregateTimeout)
+		defer cancel()
+
+		raw, err := ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+		if err != nil {
+			return err
+		}
+
+		total, ok := raw.(int64)
+		if !ok {
+			return &ExecError{
+				Op:  "QueryOptions.runGo",
+				Err: fmt.Errorf("paginate count wrong type: %T", raw),
+			}
+		}
+
+		paginateCount = int(total)
+		return nil
 	})
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
 
-	total, ok := raw.(int64)
-	if !ok {
-		return nil, fmt.Errorf("paginate count wrong type: %T", raw)
-	}
+	searchResponse.Meta.Paginate = build.Paginate.Calculate(int(paginateCount), searchResponse.Meta.Count)
 
-	res.Meta.Paginate = build.Paginate.Calculate(int(total), res.Meta.Count)
-
-	return res, nil
+	return searchResponse, nil
 }
 
 func (qo *QueryOptions) runTx(
@@ -212,7 +233,10 @@ func (qo *QueryOptions) runTx(
 
 		total, ok := raw.(int64)
 		if !ok {
-			return nil, fmt.Errorf("paginate count wrong type: %T", raw)
+			return nil, &ExecError{
+				Op:  "QueryOptions.runGo",
+				Err: fmt.Errorf("paginate count wrong type: %T", raw),
+			}
 		}
 
 		return &SearchResponse{
@@ -232,7 +256,7 @@ type QueryOptionsBuild struct {
 	TransactionIsolationLevel stdsql.IsolationLevel
 }
 
-func (qo *QueryOptions) Prepare(
+func (qo *QueryOptions) Build(
 	conf *Config,
 	node Node,
 ) (*QueryOptionsBuild, error) {

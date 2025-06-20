@@ -3,12 +3,9 @@ package search
 import (
 	"context"
 	"fmt"
-	"maps"
 	"strings"
 	"sync"
 	"time"
-
-	stdsql "database/sql"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -128,95 +125,6 @@ func contextTimeout(parent context.Context, timeout time.Duration) (context.Cont
 	return parent, noopFn
 }
 
-func GoWithTimeout[T any](
-	ctx context.Context,
-	wg *errgroup.Group,
-	timeout time.Duration,
-	fn func(context.Context) (T, error),
-) (res T) {
-	if ctx.Err() != nil {
-		return
-	}
-	wg.Go(func() (err error) {
-		ctx, cancel := contextTimeout(ctx, timeout)
-		defer cancel()
-
-		res, err = fn(ctx)
-		if err != nil {
-			return
-		}
-		return
-	})
-	return
-}
-
-func GoBatchWithTimeout[T any](
-	ctx context.Context,
-	wg *errgroup.Group,
-	timeout time.Duration,
-	funcs []func(context.Context) (T, error),
-) []T {
-	results := make([]T, len(funcs))
-	var mu sync.Mutex
-
-	for i, exec := range funcs {
-		if ctx.Err() != nil {
-			break
-		}
-
-		wg.Go(func() error {
-			ctx, cancel := contextTimeout(ctx, timeout)
-			defer cancel()
-
-			res, err := exec(ctx)
-			if err != nil {
-				return err
-			}
-
-			mu.Lock()
-			results[i] = res
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	return results
-}
-
-func WithTx[T any](
-	ctx context.Context,
-	client Client,
-	txOpts *stdsql.TxOptions,
-	fn func(ctx context.Context, client Client) (T, error),
-) (T, error) {
-	var zero T
-
-	tx, clientTx, err := client.Tx(ctx, txOpts)
-	if err != nil {
-		return zero, err
-	}
-	defer func() {
-		if v := recover(); v != nil {
-			panic(rollback(tx, err))
-		}
-	}()
-	res, err := fn(ctx, clientTx)
-	if err != nil {
-		return zero, rollback(tx, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return zero, fmt.Errorf("committing transaction: %w", err)
-	}
-	return res, nil
-}
-
-func rollback(tx Transaction, err error) error {
-	if rerr := tx.Rollback(); rerr != nil {
-		err = fmt.Errorf("%w: rolling back transaction: %v", err, rerr)
-	}
-	return err
-}
-
 type SliceAlias[T any] interface {
 	~[]T
 }
@@ -236,74 +144,36 @@ func splitInChunks[SliceT SliceAlias[ElemT], ElemT any](input SliceT, batchSize 
 	return chunks
 }
 
-func executeScalarGroupsWg(
+func GoExecBatch[T any](
 	ctx context.Context,
-	client Client,
-	cfg *Config,
 	wg *errgroup.Group,
-	count int,
-	scalarGroups ...[]*ScalarQuery,
-) map[string]any {
-	if len(scalarGroups) == 0 {
-		return nil
-	}
+	timeout time.Duration,
+	funcs []func(context.Context) (T, error),
+) []T {
+	results := make([]T, len(funcs))
+	var mu sync.Mutex
 
-	finalRes := make(map[string]any, count)
-	for _, group := range scalarGroups {
-		switch len(group) {
-		case 0:
-		case 1:
-			res := GoWithTimeout(ctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (any, error) {
-				return ExecuteScalar(ctx, client, group[0])
-			})
-			finalRes[group[0].Key] = res
-		default:
-			res := GoWithTimeout(ctx, wg, cfg.AggregateTimeout, func(ctx context.Context) (map[string]any, error) {
-				return ExecuteScalars(ctx, client, group...)
-			})
-			maps.Copy(finalRes, res)
+	for i := range funcs {
+		if ctx.Err() != nil {
+			break
 		}
-	}
-	return finalRes
-}
 
-func executeScalarGroups(
-	ctx context.Context,
-	client Client,
-	cfg *Config,
-	count int,
-	scalarGroups ...[]*ScalarQuery,
-) (map[string]any, error) {
-	if len(scalarGroups) == 0 {
-		return nil, nil
-	}
-
-	finalRes := make(map[string]any, count)
-	for _, group := range scalarGroups {
-		switch len(group) {
-		case 0:
-		case 1:
-			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+		i := i
+		wg.Go(func() error {
+			ctx, cancel := contextTimeout(ctx, timeout)
 			defer cancel()
 
-			res, err := ExecuteScalar(ctx, client, group[0])
+			res, err := funcs[i](ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			finalRes[group[0].Key] = res
-		default:
-			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
-			defer cancel()
-
-			res, err := ExecuteScalars(ctx, client, group...)
-			if err != nil {
-				return nil, err
-			}
-
-			maps.Copy(finalRes, res)
-		}
+			mu.Lock()
+			results[i] = res
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	return finalRes, nil
+	return results
 }

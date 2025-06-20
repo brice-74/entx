@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql/driver"
 	"fmt"
+	"maps"
+	"sync"
 
 	"entgo.io/ent/dialect/sql"
+	"golang.org/x/sync/errgroup"
 )
 
 type ScalarQuery struct {
@@ -91,4 +94,93 @@ func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery)
 		}
 	}
 	return res, nil
+}
+
+func ExecuteScalarGroupsAsync(
+	ctx context.Context,
+	wg *errgroup.Group,
+	client Client,
+	cfg *Config,
+	responseSize int,
+	scalarGroups ...[]*ScalarQuery,
+) map[string]any {
+	if len(scalarGroups) == 0 {
+		return nil
+	}
+
+	var mu sync.Mutex
+	finalRes := make(map[string]any, responseSize)
+	for _, group := range scalarGroups {
+		switch len(group) {
+		case 0:
+		case 1:
+			wg.Go(func() error {
+				ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+				defer cancel()
+				res, err := ExecuteScalar(ctx, client, group[0])
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				finalRes[group[0].Key] = res
+				mu.Unlock()
+				return nil
+			})
+		default:
+			wg.Go(func() error {
+				ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+				defer cancel()
+				res, err := ExecuteScalars(ctx, client, group...)
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				maps.Copy(finalRes, res)
+				mu.Unlock()
+				return nil
+			})
+		}
+	}
+	return finalRes
+}
+
+func ExecuteScalarGroupsSync(
+	ctx context.Context,
+	client Client,
+	cfg *Config,
+	responseSize int,
+	scalarGroups ...[]*ScalarQuery,
+) (map[string]any, error) {
+	if len(scalarGroups) == 0 {
+		return nil, nil
+	}
+
+	finalRes := make(map[string]any, responseSize)
+	for _, group := range scalarGroups {
+		switch len(group) {
+		case 0:
+		case 1:
+			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			defer cancel()
+
+			res, err := ExecuteScalar(ctx, client, group[0])
+			if err != nil {
+				return nil, err
+			}
+
+			finalRes[group[0].Key] = res
+		default:
+			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			defer cancel()
+
+			res, err := ExecuteScalars(ctx, client, group...)
+			if err != nil {
+				return nil, err
+			}
+
+			maps.Copy(finalRes, res)
+		}
+	}
+
+	return finalRes, nil
 }

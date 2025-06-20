@@ -339,7 +339,7 @@ func (a *OverallAggregate) Build(graph Graph) (*sql.Selector, string, error) {
 	return sel, alias, nil
 }
 
-func (a *OverallAggregate) PrepareScalar(graph Graph) (*ScalarQuery, error) {
+func (a *OverallAggregate) BuildScalar(graph Graph) (*ScalarQuery, error) {
 	sel, alias, err := a.Build(graph)
 	if err != nil {
 		return nil, err
@@ -389,7 +389,7 @@ func (oas OverallAggregates) Execute(
 		return nil, err
 	}
 
-	scalars, err := oas.PrepareScalars(graph)
+	scalars, err := oas.BuildScalars(graph)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +399,7 @@ func (oas OverallAggregates) Execute(
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(min(len(chunks), cfg.MaxParallelWorkersPerRequest))
 
-	res := executeScalarGroupsWg(wgctx, client, cfg, wg, count, chunks...)
+	res := ExecuteScalarGroupsAsync(wgctx, wg, client, cfg, count, chunks...)
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
@@ -408,12 +408,12 @@ func (oas OverallAggregates) Execute(
 	return res, nil
 }
 
-func (oas OverallAggregates) PrepareScalars(graph Graph) ([]*ScalarQuery, error) {
+func (oas OverallAggregates) BuildScalars(graph Graph) ([]*ScalarQuery, error) {
 	if length := len(oas); length > 0 {
 		var scalars = make([]*ScalarQuery, 0, length)
 
 		for i := range oas {
-			s, err := oas[i].PrepareScalar(graph)
+			s, err := oas[i].BuildScalar(graph)
 			if err != nil {
 				return nil, err
 			}

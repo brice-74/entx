@@ -1,7 +1,6 @@
 package search
 
 import (
-	"context"
 	"database/sql"
 	stdsql "database/sql"
 	"errors"
@@ -123,7 +122,7 @@ type TxQueryGroup struct {
 	QueryGroup
 }
 
-func (r *TxQueryGroup) Prepare(conf *Config, graph Graph) (*TxQueryGroupBuild, error) {
+func (r *TxQueryGroup) Build(conf *Config, graph Graph) (*TxQueryGroupBuild, error) {
 	txBuild := new(TxQueryGroupBuild)
 	if r.TransactionIsolationLevel != nil {
 		txBuild.IsolationLevel = *r.TransactionIsolationLevel
@@ -131,7 +130,7 @@ func (r *TxQueryGroup) Prepare(conf *Config, graph Graph) (*TxQueryGroupBuild, e
 		txBuild.IsolationLevel = conf.Transaction.IsolationLevel
 	}
 
-	build, err := r.QueryGroup.Prepare(conf, graph)
+	build, err := r.QueryGroup.Build(conf, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +156,9 @@ func (tr *TxQueryGroup) ValidateAndPreprocess(c *Config) (countAggregates, count
 	return tr.QueryGroup.ValidateAndPreprocess(c)
 }
 
-type ScalarGroup []*ScalarQuery
-
 type QueryGroupBuild struct {
 	Searches   []*NamedQueryBuild
-	Aggregates ScalarGroup
+	Aggregates []*ScalarQuery
 }
 
 type QueryGroup struct {
@@ -169,7 +166,7 @@ type QueryGroup struct {
 	Aggregates []OverallAggregate `json:"aggregates,omitempty"`
 }
 
-func (r *QueryGroup) Execute(
+/* func (r *QueryGroup) Execute(
 	ctx context.Context,
 	client Client,
 	graph Graph,
@@ -180,16 +177,41 @@ func (r *QueryGroup) Execute(
 		return nil, err
 	}
 
-	build, err := r.Prepare(cfg, graph)
+	build, err := r.Build(cfg, graph)
 	if err != nil {
 		return nil, err
 	}
 
-	build.Searches
+	var searchAlone, searchTxPaginate, searchPaginate []*NamedQueryBuild
+	for _, s := range build.Searches {
+		if s.Paginate != nil {
+			if s.EnableTransaction {
+				searchTxPaginate = append(searchTxPaginate, s)
+			}
+			searchPaginate = append(searchPaginate, s)
+		}
+		searchAlone = append(searchAlone, s)
+	}
 
-}
+	if len(searchPaginate) > 0 {
+		for _, s := range searchPaginate {
+			build.Aggregates = append(build.Aggregates, s.Paginate.ToScalarQuery(s.Key))
+		}
+	}
 
-func (r *QueryGroup) Prepare(conf *Config, graph Graph) (
+
+	go {
+		searchAlone
+		searchTx+paginate
+		search => feelpaginate
+		aggregates => feelpaginate
+
+	}
+
+
+} */
+
+func (r *QueryGroup) Build(conf *Config, graph Graph) (
 	build *QueryGroupBuild,
 	err error,
 ) {
@@ -197,7 +219,7 @@ func (r *QueryGroup) Prepare(conf *Config, graph Graph) (
 	if lenght := len(r.Searches); lenght > 0 {
 		searches := make([]*NamedQueryBuild, 0, lenght)
 		for i, s := range r.Searches {
-			searches[i], err = s.Prepare(i, conf, graph)
+			searches[i], err = s.Build(i, conf, graph)
 			if err != nil {
 				return
 			}
@@ -205,9 +227,9 @@ func (r *QueryGroup) Prepare(conf *Config, graph Graph) (
 		build.Searches = searches
 	}
 	if lenght := len(r.Aggregates); lenght > 0 {
-		aggregates := make(ScalarGroup, 0, lenght)
+		aggregates := make([]*ScalarQuery, 0, lenght)
 		for i, a := range r.Aggregates {
-			aggregates[i], err = a.PrepareScalar(graph)
+			aggregates[i], err = a.BuildScalar(graph)
 			if err != nil {
 				return
 			}
