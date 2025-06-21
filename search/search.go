@@ -10,6 +10,78 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type NamedQueries []*NamedQuery
+
+type SearchesResponse = map[string]*SearchResponse
+
+func (queries NamedQueries) Execute(
+	ctx context.Context,
+	client Client,
+	graph Graph,
+	cfg *Config,
+) (SearchesResponse, error) {
+	// TODO
+	return nil, nil
+}
+
+func (queries NamedQueries) BuildClassified(
+	conf *Config,
+	graph Graph,
+) (
+	searchOnly []*NamedQueryBuild,
+	paginatedWithTx []*NamedQueryBuild,
+	paginatedWithoutTx []*NamedQueryBuild,
+	err error,
+) {
+	for i, q := range queries {
+		build, err := q.Build(i, conf, graph)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		switch true {
+
+		case build.IsPaginatedWithTx():
+			paginatedWithTx = append(paginatedWithTx, build)
+		case build.IsPaginatedWithoutTx():
+			paginatedWithoutTx = append(paginatedWithoutTx, build)
+		default:
+			searchOnly = append(searchOnly, build)
+		}
+	}
+	return
+}
+
+func (queries NamedQueries) Build(conf *Config, graph Graph) ([]*NamedQueryBuild, error) {
+	var builds = make([]*NamedQueryBuild, 0, len(queries))
+	for i, q := range queries {
+		build, err := q.Build(i, conf, graph)
+		if err != nil {
+			return nil, err
+		}
+		builds[i] = build
+	}
+	return builds, nil
+}
+
+func (queries NamedQueries) ValidateAndPreprocessFinal(cfg *Config) error {
+	count, err := queries.ValidateAndPreprocess(cfg)
+	if err != nil {
+		return err
+	}
+
+	return checkMaxSearches(cfg, count)
+}
+
+func (queries NamedQueries) ValidateAndPreprocess(cfg *Config) (count int, err error) {
+	for _, q := range queries {
+		if err = q.ValidateAndPreprocess(cfg); err != nil {
+			return
+		}
+		count++
+	}
+	return
+}
+
 type NamedQueryBuild struct {
 	Key string
 	QueryOptionsBuild
@@ -254,6 +326,19 @@ type QueryOptionsBuild struct {
 	Paginate                  *PaginateInfos
 	EnableTransaction         bool
 	TransactionIsolationLevel stdsql.IsolationLevel
+}
+
+func (build *QueryOptionsBuild) IsSearchOnly() bool {
+	return !build.IsPaginatedWithTx() || !build.IsPaginatedWithoutTx()
+}
+func (build *QueryOptionsBuild) IsPaginated() bool {
+	return build.Paginate != nil
+}
+func (build *QueryOptionsBuild) IsPaginatedWithTx() bool {
+	return build.Paginate != nil && build.EnableTransaction
+}
+func (build *QueryOptionsBuild) IsPaginatedWithoutTx() bool {
+	return build.Paginate != nil && !build.EnableTransaction
 }
 
 func (qo *QueryOptions) Build(

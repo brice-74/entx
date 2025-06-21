@@ -21,7 +21,7 @@ const (
 	OpNotIn        Operator = "NOT IN"
 )
 
-type Filters []Filter
+type Filters []*Filter
 
 func (fs Filters) Predicate(node Node) ([]func(*sql.Selector), error) {
 	if len(fs) == 0 {
@@ -225,7 +225,7 @@ func buildBasePredicate(
 }
 
 func (f *Filter) ValidateAndPreprocess(cfg *FilterConfig) error {
-	return Filters{*f}.ValidateAndPreprocess(cfg)
+	return Filters{f}.ValidateAndPreprocess(cfg)
 }
 
 func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRelations *int) error {

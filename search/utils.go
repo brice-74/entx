@@ -177,3 +177,57 @@ func GoExecBatch[T any](
 
 	return results
 }
+
+func checkMaxSearches(cfg *Config, count int) (err error) {
+	if cfg.MaxSearchesPerRequest != 0 && count > cfg.MaxSearchesPerRequest {
+		err = &ValidationError{
+			Rule: "MaxSearchesPerBundle",
+			Err:  fmt.Errorf("found %d searches in bundle, but the maximum allowed is %d", count, cfg.MaxSearchesPerRequest),
+		}
+	}
+	return
+}
+
+func checkMaxAggregates(cfg *Config, count int) (err error) {
+	if cfg.MaxAggregatesPerRequest != 0 && count > cfg.MaxAggregatesPerRequest {
+		err = &ValidationError{
+			Rule: "MaxAggregatesPerBundle",
+			Err:  fmt.Errorf("found %d aggregates in bundle, but the maximum allowed is %d", count, cfg.MaxAggregatesPerRequest),
+		}
+	}
+	return
+}
+
+func attachPagination(
+	res *GroupResponse,
+	pagMap map[string]*PaginateInfos,
+) error {
+	for key, p := range pagMap {
+		raw, ok := res.Meta.Aggregates[key]
+		if !ok {
+			return &ExecError{
+				Op:  "attachPagination",
+				Err: fmt.Errorf("missing paginate count for '%s'", key),
+			}
+		}
+		cnt, ok := raw.(int64)
+		if !ok {
+			return &ExecError{
+				Op:  "attachPagination",
+				Err: fmt.Errorf("paginate count wrong type for '%s': %T", key, raw),
+			}
+
+		}
+		sr, exist := res.Searches[key]
+		if !exist {
+			return &ExecError{
+				Op:  "attachPagination",
+				Err: fmt.Errorf("search response not found for paginate on key '%s'", key),
+			}
+		}
+		sr.Meta.Paginate = p.Calculate(int(cnt), sr.Meta.Count)
+		// remove count used for pagination from meta aggregates response
+		delete(res.Meta.Aggregates, key)
+	}
+	return nil
+}

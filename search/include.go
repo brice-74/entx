@@ -6,7 +6,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
-type Includes []Include
+type Includes []*Include
 
 func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
 	var applies = make([]func(Query), 0, len(incs))
@@ -138,7 +138,7 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 }
 
 func (inc *Include) ValidateAndPreprocess(cfg *IncludeConfig) error {
-	return Includes{*inc}.ValidateAndPreprocess(cfg)
+	return Includes{inc}.ValidateAndPreprocess(cfg)
 }
 
 func (inc *Include) walkValidate(cfg *IncludeConfig, depth int, total *int) error {

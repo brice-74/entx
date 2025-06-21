@@ -224,7 +224,7 @@ func (a *Aggregate) Predicate(root Node) (func(*sql.Selector), string, error) {
 	return modifier, alias, nil
 }
 
-type Aggregates []Aggregate
+type Aggregates []*Aggregate
 
 func (as Aggregates) Predicate(node Node) ([]func(*sql.Selector), []string, error) {
 	lenAggregates := len(as)
@@ -252,8 +252,8 @@ func (ags Aggregates) ValidateAndPreprocess(cfg *AggregateConfig) error {
 	if cfg == nil {
 		cfg = &AggregateConfig{}
 	}
-	for i := range ags {
-		if err := ags[i].ValidateAndPreprocess(cfg); err != nil {
+	for _, agg := range ags {
+		if err := agg.ValidateAndPreprocess(cfg); err != nil {
 			return err
 		}
 	}
@@ -356,8 +356,8 @@ func (a *OverallAggregate) BuildScalar(graph Graph) (*ScalarQuery, error) {
 	return sq, nil
 }
 
-func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error {
-	if err := oa.BaseAggregate.preprocess(filterCfg, false); err != nil {
+func (oa *OverallAggregate) ValidateAndPreprocess(cfg *Config) error {
+	if err := oa.BaseAggregate.preprocess(&cfg.FilterConfig, false); err != nil {
 		return err
 	}
 
@@ -373,7 +373,7 @@ func (oa *OverallAggregate) ValidateAndPreprocess(filterCfg *FilterConfig) error
 
 type AggregatesResponse = map[string]any
 
-type OverallAggregates []OverallAggregate
+type OverallAggregates []*OverallAggregate
 
 func (oas OverallAggregates) Execute(
 	ctx context.Context,
@@ -384,7 +384,7 @@ func (oas OverallAggregates) Execute(
 	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
-	count, err := oas.ValidateAndPreprocess(&cfg.FilterConfig)
+	err, count := oas.ValidateAndPreprocessFinal(cfg), len(oas)
 	if err != nil || count == 0 {
 		return nil, err
 	}
@@ -412,8 +412,8 @@ func (oas OverallAggregates) BuildScalars(graph Graph) ([]*ScalarQuery, error) {
 	if length := len(oas); length > 0 {
 		var scalars = make([]*ScalarQuery, 0, length)
 
-		for i := range oas {
-			s, err := oas[i].BuildScalar(graph)
+		for i, oa := range oas {
+			s, err := oa.BuildScalar(graph)
 			if err != nil {
 				return nil, err
 			}
@@ -423,9 +423,18 @@ func (oas OverallAggregates) BuildScalars(graph Graph) ([]*ScalarQuery, error) {
 	return nil, nil
 }
 
-func (oas OverallAggregates) ValidateAndPreprocess(cfg *FilterConfig) (count int, err error) {
-	for i := range oas {
-		if err = oas[i].ValidateAndPreprocess(cfg); err != nil {
+func (oas OverallAggregates) ValidateAndPreprocessFinal(cfg *Config) error {
+	count, err := oas.ValidateAndPreprocess(cfg)
+	if err != nil {
+		return err
+	}
+
+	return checkMaxAggregates(cfg, count)
+}
+
+func (oas OverallAggregates) ValidateAndPreprocess(cfg *Config) (count int, err error) {
+	for _, oa := range oas {
+		if err = oa.ValidateAndPreprocess(cfg); err != nil {
 			return
 		}
 		count++
