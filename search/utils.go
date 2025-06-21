@@ -226,7 +226,6 @@ func attachPagination(
 			}
 		}
 		sr.Meta.Paginate = p.Calculate(int(cnt), sr.Meta.Count)
-		// remove count used for pagination from meta aggregates response
 		delete(res.Meta.Aggregates, key)
 	}
 	return nil

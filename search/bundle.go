@@ -25,6 +25,9 @@ func (r *QueryBundle) Execute(
 	graph Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
+	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
+
 	// TODO
 	return nil, nil
 }
@@ -65,6 +68,9 @@ func (r *QueryGroup) Execute(
 	graph Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
+	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
+
 	// TODO
 	return nil, nil
 }
