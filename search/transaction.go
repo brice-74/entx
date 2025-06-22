@@ -266,15 +266,20 @@ func (groups TxQueryGroups) Execute(
 		return nil, err
 	}
 
-	res := &GroupResponseSync{
-		Searches:   *common.NewMapSync(make(map[string]*SearchResponse, countSearches)),
-		Aggregates: *common.NewMapSync(make(map[string]any, countAggregates)),
+	var res GroupResponseSync
+
+	if countSearches > 0 {
+		res.Searches = *common.NewMapSync(make(map[string]*SearchResponse, countSearches))
+	}
+
+	if countAggregates > 0 {
+		res.Aggregates = *common.NewMapSync(make(map[string]any, countAggregates))
 	}
 
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
 
-	builds.execute(wgctx, client, cfg, wg, res)
+	builds.execute(wgctx, client, cfg, wg, &res)
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}

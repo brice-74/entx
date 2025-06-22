@@ -93,3 +93,11 @@ func CheckMaxAggregates(cfg *Config, count int) (err error) {
 	}
 	return
 }
+
+func MergeSlices[T any](a, b []T) []T {
+	total := len(a) + len(b)
+	result := make([]T, total)
+	copy(result, a)
+	copy(result[len(a):], b)
+	return result
+}

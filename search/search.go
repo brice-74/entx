@@ -15,6 +15,8 @@ import (
 
 type NamedQueries []*NamedQuery
 
+// TODO: use ClassifiedBuilds for NamedQueries.Execute
+
 func (queries NamedQueries) Execute(
 	ctx context.Context,
 	client entx.Client,
