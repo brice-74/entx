@@ -41,6 +41,14 @@ type QueryGroupBuildClassified struct {
 	Aggregates         []*common.ScalarQuery
 }
 
+func (build *QueryGroupBuildClassified) Execute(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+) {
+	// coupled with NamedQueries, execution is the same, with the addition of aggregates
+}
+
 func (r *QueryGroup) BuildClassified(cfg *Config, graph entx.Graph) (
 	build *QueryGroupBuildClassified,
 	err error,
