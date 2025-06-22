@@ -3,9 +3,7 @@ package common
 import (
 	"context"
 	"database/sql/driver"
-	"fmt"
-	"maps"
-	"sync"
+	"errors"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/brice-74/entx"
@@ -26,23 +24,18 @@ func ExecuteScalar(ctx context.Context, client entx.Client, scalar *ScalarQuery)
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		return nil, fmt.Errorf("ExecuteScalars: no rows returned")
+		return nil, &ExecError{
+			Op:  "ExecuteScalar",
+			Err: errors.New("no rows returned"),
+		}
 	}
 	if err := rows.Scan(scalar.Dest); err != nil {
 		return nil, err
 	}
-	v, ok := scalar.Dest.(driver.Valuer)
-	if ok {
-		val, err := v.Value()
-		if err != nil {
-			return nil, err
-		}
-		return val, nil
-	}
-	return scalar.Dest, nil
+	return handleValuer(scalar.Dest)
 }
 
-// Execute constructs and executes a query such as :
+// executeScalars constructs and executes a query such as :
 //
 //	SELECT
 //	  (…subquery1…) AS alias1,
@@ -50,20 +43,23 @@ func ExecuteScalar(ctx context.Context, client entx.Client, scalar *ScalarQuery)
 //	  …
 //
 // and scans directly into Dest.
-func ExecuteScalars(ctx context.Context, client entx.Client, scalars ...*ScalarQuery) (map[string]any, error) {
+func executeScalars(
+	ctx context.Context,
+	client entx.Client,
+	scalars ...*ScalarQuery,
+) ([]any, error) {
 	if length := len(scalars); length <= 0 {
 		return nil, nil
 	} else if length == 1 {
-		res, err := ExecuteScalar(ctx, client, scalars[0])
+		scalarRes, err := ExecuteScalar(ctx, client, scalars[0])
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{scalars[0].Key: res}, nil
+		return []any{scalarRes}, nil
 	}
 
 	sel := sql.Select()
-	lenScalars := len(scalars)
-	dests := make([]any, lenScalars)
+	dests := make([]any, len(scalars))
 	for i, q := range scalars {
 		sel.AppendSelectExprAs(q.Selector, q.Key)
 		dests[i] = q.Dest
@@ -76,25 +72,68 @@ func ExecuteScalars(ctx context.Context, client entx.Client, scalars ...*ScalarQ
 	}
 	defer rows.Close()
 	if !rows.Next() {
-		return nil, fmt.Errorf("ExecuteScalars: no rows returned")
+		return nil, &ExecError{
+			Op:  "executeScalars",
+			Err: errors.New("no rows returned"),
+		}
 	}
 	if err := rows.Scan(dests...); err != nil {
 		return nil, err
 	}
 
-	res := make(map[string]any, lenScalars)
-	for _, q := range scalars {
-		if v, ok := q.Dest.(driver.Valuer); ok {
-			val, err := v.Value()
-			if err != nil {
-				return nil, err
-			}
-			res[q.Key] = val
-		} else {
-			res[q.Key] = q.Dest
+	for i, q := range scalars {
+		value, err := handleValuer(q.Dest)
+		if err != nil {
+			return nil, err
 		}
+		dests[i] = value
 	}
-	return res, nil
+	return dests, nil
+}
+
+func handleValuer(dest any) (any, error) {
+	v, ok := dest.(driver.Valuer)
+	if ok {
+		val, err := v.Value()
+		if err != nil {
+			return nil, &ExecError{
+				Op:  "handleValuer",
+				Err: err,
+			}
+		}
+		return val, nil
+	}
+	return v, nil
+}
+
+func ExecuteScalars(ctx context.Context, client entx.Client, resp map[string]any, scalars ...*ScalarQuery) error {
+	if resp == nil {
+		panic("response map must be non nil")
+	}
+	vals, err := executeScalars(ctx, client, scalars...)
+	if err != nil {
+		return err
+	}
+	for i, q := range scalars {
+		resp[q.Key] = vals[i]
+	}
+	return nil
+}
+
+func ExecuteScalarsAsync(ctx context.Context, client entx.Client, resp *MapSync[string, any], scalars ...*ScalarQuery) error {
+	if resp == nil {
+		panic("MapSync pointer must be non nil")
+	}
+	vals, err := executeScalars(ctx, client, scalars...)
+	if err != nil {
+		return err
+	}
+	resp.Lock()
+	defer resp.Unlock()
+	for i, q := range scalars {
+		resp.UnsafeSet(q.Key, vals[i])
+	}
+	return nil
 }
 
 func ExecuteScalarGroupsAsync(
@@ -102,15 +141,16 @@ func ExecuteScalarGroupsAsync(
 	wg *errgroup.Group,
 	client entx.Client,
 	cfg *Config,
-	responseSize int,
+	response *MapSync[string, any],
 	scalarGroups ...[]*ScalarQuery,
-) map[string]any {
+) {
+	if response == nil {
+		panic("MapSync pointer must be non nil")
+	}
 	if len(scalarGroups) == 0 {
-		return nil
+		return
 	}
 
-	var mu sync.Mutex
-	finalRes := make(map[string]any, responseSize)
 	for _, group := range scalarGroups {
 		switch len(group) {
 		case 0:
@@ -122,41 +162,33 @@ func ExecuteScalarGroupsAsync(
 				if err != nil {
 					return err
 				}
-				mu.Lock()
-				finalRes[group[0].Key] = res
-				mu.Unlock()
+				response.Set(group[0].Key, res)
 				return nil
 			})
 		default:
 			wg.Go(func() error {
 				ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 				defer cancel()
-				res, err := ExecuteScalars(ctx, client, group...)
-				if err != nil {
-					return err
-				}
-				mu.Lock()
-				maps.Copy(finalRes, res)
-				mu.Unlock()
-				return nil
+				return ExecuteScalarsAsync(ctx, client, response, group...)
 			})
 		}
 	}
-	return finalRes
 }
 
-func ExecuteScalarGroupsSync(
+func ExecuteScalarGroups(
 	ctx context.Context,
 	client entx.Client,
 	cfg *Config,
-	responseSize int,
+	response map[string]any,
 	scalarGroups ...[]*ScalarQuery,
-) (map[string]any, error) {
+) (err error) {
+	if response == nil {
+		panic("response map must be non nil")
+	}
 	if len(scalarGroups) == 0 {
-		return nil, nil
+		return
 	}
 
-	finalRes := make(map[string]any, responseSize)
 	for _, group := range scalarGroups {
 		switch len(group) {
 		case 0:
@@ -164,24 +196,15 @@ func ExecuteScalarGroupsSync(
 			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 			defer cancel()
 
-			res, err := ExecuteScalar(ctx, client, group[0])
-			if err != nil {
-				return nil, err
-			}
-
-			finalRes[group[0].Key] = res
+			response[group[0].Key], err = ExecuteScalar(ctx, client, group[0])
+			return
 		default:
 			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 			defer cancel()
 
-			res, err := ExecuteScalars(ctx, client, group...)
-			if err != nil {
-				return nil, err
-			}
-
-			maps.Copy(finalRes, res)
+			return ExecuteScalars(ctx, client, response, group...)
 		}
 	}
 
-	return finalRes, nil
+	return nil
 }

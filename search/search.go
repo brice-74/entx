@@ -13,6 +13,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO: rethink all this and instead structure an "AsyncExecutor" to organize all execution variants
+
 type NamedQueries []*NamedQuery
 
 func (queries NamedQueries) Execute(
@@ -21,26 +23,60 @@ func (queries NamedQueries) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (SearchesResponse, error) {
-	// TODO
-	return nil, nil
+	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	defer cancel()
+
+	if err := queries.ValidateAndPreprocessFinal(cfg); err != nil {
+		return nil, err
+	}
+
+	searchOnly, paginatedWithTx, paginatedWithoutTx, err := queries.BuildClassified(cfg, graph)
+	if err != nil {
+		return nil, err
+	}
+
+	countSearchOnly, countPaginatedWithTx, countPaginatedWithoutTx := len(searchOnly), len(paginatedWithTx), len(paginatedWithoutTx)
+	totalSearches := countSearchOnly + countPaginatedWithTx + countPaginatedWithoutTx
+
+	var searchesSync = common.NewMapSync(make(SearchesResponse, totalSearches))
+	var scalarResponses *common.MapSync[string, any]
+	if countPaginatedWithoutTx > 0 {
+		scalarResponses = common.NewMapSync(make(map[string]any, countPaginatedWithoutTx))
+	}
+
+	wg, wgctx := errgroup.WithContext(ctx)
+	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
+
+	searchOnly.ExecuteSearchesOnly(wgctx, client, cfg, wg, searchesSync)
+	paginatedWithTx.ExecutePaginatedWithTx(wgctx, client, cfg, wg, searchesSync)
+	paginations := paginatedWithoutTx.ExecutePaginatedWithoutTx(wgctx, client, cfg, wg, searchesSync, scalarResponses)
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	if _, err := common.AttachPaginationSync(searchesSync, scalarResponses, paginations); err != nil {
+		return nil, err
+	}
+
+	return searchesSync.UnsafeRaw(), nil
 }
 
 func (queries NamedQueries) BuildClassified(
-	conf *Config,
+	cfg *Config,
 	graph entx.Graph,
 ) (
-	searchOnly []*NamedQueryBuild,
-	paginatedWithTx []*NamedQueryBuild,
-	paginatedWithoutTx []*NamedQueryBuild,
+	searchOnly NamedQueryBuilds,
+	paginatedWithTx NamedQueryBuilds,
+	paginatedWithoutTx NamedQueryBuilds,
 	err error,
 ) {
 	for i, q := range queries {
-		build, err := q.Build(i, conf, graph)
+		build, err := q.Build(i, cfg, graph)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		switch true {
-
 		case build.IsPaginatedWithTx():
 			paginatedWithTx = append(paginatedWithTx, build)
 		case build.IsPaginatedWithoutTx():
@@ -79,6 +115,84 @@ func (queries NamedQueries) ValidateAndPreprocess(cfg *Config) (count int, err e
 			return
 		}
 		count++
+	}
+	return
+}
+
+type NamedQueryBuilds []*NamedQueryBuild
+
+func (builds NamedQueryBuilds) ExecuteSearchesOnly(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+	wg *errgroup.Group,
+	searches *common.MapSync[string, *common.SearchResponse],
+) {
+	for _, build := range builds {
+		wg.Go(func() error {
+			res, err := build.ExecuteSearchOnly(ctx, client, cfg)
+			if err != nil {
+				return err
+			}
+			searches.Set(build.Key, res)
+			return nil
+		})
+	}
+}
+
+func (builds NamedQueryBuilds) ExecutePaginatedWithTx(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+	wg *errgroup.Group,
+	searches *common.MapSync[string, *common.SearchResponse],
+) {
+	for _, build := range builds {
+		wg.Go(func() error {
+			res, err := build.ExecutePaginatedWithTx(ctx, client, cfg)
+			if err != nil {
+				return err
+			}
+			searches.Set(build.Key, res)
+			return nil
+		})
+	}
+}
+
+func (builds NamedQueryBuilds) ExecutePaginatedWithoutTx(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+	wg *errgroup.Group,
+	searches *common.MapSync[string, *common.SearchResponse],
+	totals *common.MapSync[string, any],
+) (paginations map[string]*common.PaginateInfos) {
+	if lenght := len(builds); lenght > 0 {
+		scalars := make([]*common.ScalarQuery, lenght)
+		paginations = make(map[string]*common.PaginateInfos, lenght)
+
+		for i, build := range builds {
+			wg.Go(func() error {
+				res, err := build.ExecuteSearchOnly(ctx, client, cfg)
+				if err != nil {
+					return err
+				}
+				searches.Set(build.Key, res)
+				return nil
+			})
+
+			scalars[i] = build.Paginate.ToScalarQuery(build.Key)
+			paginations[build.Key] = build.Paginate
+		}
+
+		common.ExecuteScalarGroupsAsync(
+			ctx,
+			wg,
+			client,
+			cfg,
+			totals,
+			common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)...,
+		)
 	}
 	return
 }
@@ -194,15 +308,97 @@ func (qo *QueryOptions) execute(
 	cfg *Config,
 	build *QueryOptionsBuild,
 ) (*SearchResponse, error) {
-	if build.Paginate != nil {
-		if build.EnableTransaction {
-			// run synchronously search query & count paginate in the same transaction
-			return qo.runTx(ctx, client, build, cfg)
-		}
-		// run asynchronously search query & count paginate inside 2 goroutines
-		return qo.runGo(ctx, client, build, cfg)
+	switch true {
+	case build.IsPaginatedWithTx():
+		return build.ExecutePaginatedWithTx(ctx, client, cfg)
+	case build.IsPaginatedWithoutTx():
+		return build.ExecutePaginatedWithoutTx(ctx, client, cfg)
+	default:
+		return build.ExecuteSearchOnly(ctx, client, cfg)
 	}
-	// run search without pagination
+}
+
+type QueryOptionsBuild struct {
+	ExecFn                    func(context.Context, entx.Client) (any, int, error)
+	Paginate                  *common.PaginateInfos
+	EnableTransaction         bool
+	TransactionIsolationLevel stdsql.IsolationLevel
+}
+
+// run asynchronously search query & count paginate inside 2 goroutines
+func (build *QueryOptionsBuild) ExecutePaginatedWithoutTx(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+) (*SearchResponse, error) {
+	if !build.IsPaginatedWithoutTx() {
+		panic("cannot call QueryOptionsBuild.ExecutePaginatedWithTx with nil pagination or with transaction")
+	}
+
+	wg, wgctx := errgroup.WithContext(ctx)
+	wg.SetLimit(2)
+
+	var (
+		response      *SearchResponse
+		paginateCount int
+	)
+
+	wg.Go(func() (err error) {
+		response, err = build.ExecuteSearchOnly(wgctx, client, cfg)
+		return
+	})
+
+	wg.Go(func() (err error) {
+		paginateCount, err = build.ExecutePaginate(wgctx, client, cfg)
+		return
+	})
+
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	response.Meta.Paginate = build.Paginate.Calculate(paginateCount, response.Meta.Count)
+	return response, nil
+}
+
+// run synchronously search query & count paginate in the same transaction
+func (build *QueryOptionsBuild) ExecutePaginatedWithTx(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+) (*SearchResponse, error) {
+	if !build.IsPaginatedWithTx() {
+		panic("cannot call QueryOptionsBuild.ExecutePaginatedWithTx with nil pagination or without transaction")
+	}
+
+	ctx, cancel := common.ContextTimeout(ctx, cfg.Transaction.Timeout)
+	defer cancel()
+
+	return WithTx(ctx, client, &stdsql.TxOptions{
+		ReadOnly:  true,
+		Isolation: build.TransactionIsolationLevel,
+	}, func(ctx context.Context, client entx.Client) (*SearchResponse, error) {
+		response, err := build.ExecuteSearchOnly(ctx, client, cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		total, err := build.ExecutePaginate(ctx, client, cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		response.Meta.Paginate = build.Paginate.Calculate(total, response.Meta.Count)
+		return response, nil
+	})
+}
+
+// execute search without pagination
+func (build *QueryOptionsBuild) ExecuteSearchOnly(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+) (*SearchResponse, error) {
 	ctx, cancel := common.ContextTimeout(ctx, cfg.QueryTimeout)
 	defer cancel()
 
@@ -214,109 +410,32 @@ func (qo *QueryOptions) execute(
 	return &SearchResponse{Data: data, Meta: &MetaSearchResponse{Count: count}}, nil
 }
 
-func (qo *QueryOptions) runGo(
+func (build *QueryOptionsBuild) ExecutePaginate(
 	ctx context.Context,
 	client entx.Client,
-	build *QueryOptionsBuild,
 	cfg *Config,
-) (*SearchResponse, error) {
-	wg, wgctx := errgroup.WithContext(ctx)
-	wg.SetLimit(2)
-
-	var (
-		searchResponse *SearchResponse
-		paginateCount  int
-	)
-
-	wg.Go(func() (err error) {
-		ctx, cancel := common.ContextTimeout(wgctx, cfg.QueryTimeout)
-		defer cancel()
-
-		data, count, err := build.ExecFn(ctx, client)
-		if err != nil {
-			return err
-		}
-
-		searchResponse = &SearchResponse{Data: data, Meta: &MetaSearchResponse{Count: count}}
-		return nil
-	})
-
-	wg.Go(func() (err error) {
-		ctx, cancel := common.ContextTimeout(wgctx, cfg.AggregateTimeout)
-		defer cancel()
-
-		raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
-		if err != nil {
-			return err
-		}
-
-		total, ok := raw.(int64)
-		if !ok {
-			return &ExecError{
-				Op:  "QueryOptions.runGo",
-				Err: fmt.Errorf("paginate count wrong type: %T", raw),
-			}
-		}
-
-		paginateCount = int(total)
-		return nil
-	})
-
-	if err := wg.Wait(); err != nil {
-		return nil, err
+) (int, error) {
+	if !build.IsPaginated() {
+		panic("cannot call QueryOptionsBuild.ExecutePaginate with nil pagination")
 	}
 
-	searchResponse.Meta.Paginate = build.Paginate.Calculate(int(paginateCount), searchResponse.Meta.Count)
-
-	return searchResponse, nil
-}
-
-func (qo *QueryOptions) runTx(
-	ctx context.Context,
-	client entx.Client,
-	build *QueryOptionsBuild,
-	cfg *Config,
-) (*SearchResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.Transaction.Timeout)
+	ctx, cancel := common.ContextTimeout(ctx, cfg.AggregateTimeout)
 	defer cancel()
 
-	return WithTx(ctx, client, &stdsql.TxOptions{
-		ReadOnly:  true,
-		Isolation: build.TransactionIsolationLevel,
-	}, func(ctx context.Context, client entx.Client) (*SearchResponse, error) {
-		data, count, err := build.ExecFn(ctx, client)
-		if err != nil {
-			return nil, err
+	raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+	if err != nil {
+		return 0, err
+	}
+
+	total, ok := raw.(int64)
+	if !ok {
+		return 0, &ExecError{
+			Op:  "QueryOptionsBuild.ExecutePaginate",
+			Err: fmt.Errorf("paginate count wrong type: %T", raw),
 		}
+	}
 
-		raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
-		if err != nil {
-			return nil, err
-		}
-
-		total, ok := raw.(int64)
-		if !ok {
-			return nil, &ExecError{
-				Op:  "QueryOptions.runGo",
-				Err: fmt.Errorf("paginate count wrong type: %T", raw),
-			}
-		}
-
-		return &SearchResponse{
-			Data: data,
-			Meta: &MetaSearchResponse{
-				Count:    count,
-				Paginate: build.Paginate.Calculate(int(total), count),
-			},
-		}, nil
-	})
-}
-
-type QueryOptionsBuild struct {
-	ExecFn                    func(context.Context, entx.Client) (any, int, error)
-	Paginate                  *common.PaginateInfos
-	EnableTransaction         bool
-	TransactionIsolationLevel stdsql.IsolationLevel
+	return int(total), nil
 }
 
 func (build *QueryOptionsBuild) IsSearchOnly() bool {

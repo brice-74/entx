@@ -33,6 +33,13 @@ func (ms *MapSync[K, V]) Set(key K, val V) {
 	ms.m[key] = val
 }
 
+// UnsafeSet sets the value for the given key directly in the internal map without acquiring any lock.
+// This method should only be used when you have manually acquired the appropriate write lock using Lock().
+// Failing to ensure proper synchronization may lead to data races or corrupted state.
+func (ms *MapSync[K, V]) UnsafeSet(key K, val V) {
+	ms.m[key] = val
+}
+
 // Modify atomically updates the value for a key using the provided function.
 // If the key does not exist, zero value is passed to fn, and the result is stored.
 func (ms *MapSync[K, V]) Modify(key K, fn func(old V) V) {
