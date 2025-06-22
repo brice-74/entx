@@ -399,13 +399,14 @@ func (oas OverallAggregates) Execute(
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(min(len(chunks), cfg.MaxParallelWorkersPerRequest))
 
-	res := common.ExecuteScalarGroupsAsync(wgctx, wg, client, cfg, count, chunks...)
+	res := common.NewMapSync(make(map[string]any, count))
+	common.ExecuteScalarGroupsAsync(wgctx, wg, client, cfg, res, chunks...)
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
 
-	return res, nil
+	return res.UnsafeRaw(), nil
 }
 
 func (oas OverallAggregates) BuildScalars(graph entx.Graph) ([]*common.ScalarQuery, error) {

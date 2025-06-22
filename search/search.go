@@ -13,8 +13,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TODO: rethink all this and instead structure an "AsyncExecutor" to organize all execution variants
-
 type NamedQueries []*NamedQuery
 
 func (queries NamedQueries) Execute(
@@ -38,37 +36,84 @@ func (queries NamedQueries) Execute(
 	countSearchOnly, countPaginatedWithTx, countPaginatedWithoutTx := len(searchOnly), len(paginatedWithTx), len(paginatedWithoutTx)
 	totalSearches := countSearchOnly + countPaginatedWithTx + countPaginatedWithoutTx
 
-	var searchesSync = common.NewMapSync(make(SearchesResponse, totalSearches))
-	var scalarResponses *common.MapSync[string, any]
+	var searchesResponse = common.NewMapSync(make(SearchesResponse, totalSearches))
+	var scalarSync *common.MapSync[string, any]
 	if countPaginatedWithoutTx > 0 {
-		scalarResponses = common.NewMapSync(make(map[string]any, countPaginatedWithoutTx))
+		scalarSync = common.NewMapSync(make(map[string]any, countPaginatedWithoutTx))
 	}
 
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
 
-	searchOnly.ExecuteSearchesOnly(wgctx, client, cfg, wg, searchesSync)
-	paginatedWithTx.ExecutePaginatedWithTx(wgctx, client, cfg, wg, searchesSync)
-	paginations := paginatedWithoutTx.ExecutePaginatedWithoutTx(wgctx, client, cfg, wg, searchesSync, scalarResponses)
+	for _, build := range searchOnly {
+		wg.Go(func() error {
+			res, err := build.ExecuteSearchOnly(wgctx, client, cfg)
+			if err != nil {
+				return err
+			}
+			searchesResponse.Set(build.Key, res)
+			return nil
+		})
+	}
+
+	for _, build := range paginatedWithTx {
+		wg.Go(func() error {
+			res, err := build.ExecutePaginatedWithTx(wgctx, client, cfg)
+			if err != nil {
+				return err
+			}
+			searchesResponse.Set(build.Key, res)
+			return nil
+		})
+	}
+
+	var paginations map[string]*common.PaginateInfos
+	if countPaginatedWithoutTx > 0 {
+		scalars := make([]*common.ScalarQuery, countPaginatedWithoutTx)
+		paginations = make(map[string]*common.PaginateInfos, countPaginatedWithoutTx)
+
+		for i, build := range paginatedWithoutTx {
+			wg.Go(func() error {
+				res, err := build.ExecuteSearchOnly(wgctx, client, cfg)
+				if err != nil {
+					return err
+				}
+				searchesResponse.Set(build.Key, res)
+				return nil
+			})
+
+			scalars[i] = build.Paginate.ToScalarQuery(build.Key)
+			paginations[build.Key] = build.Paginate
+		}
+
+		common.ExecuteScalarGroupsAsync(
+			wgctx,
+			wg,
+			client,
+			cfg,
+			scalarSync,
+			common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)...,
+		)
+	}
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
 
-	if _, err := common.AttachPaginationSync(searchesSync, scalarResponses, paginations); err != nil {
+	if _, err := common.AttachPaginationSync(searchesResponse, scalarSync, paginations); err != nil {
 		return nil, err
 	}
 
-	return searchesSync.UnsafeRaw(), nil
+	return searchesResponse.UnsafeRaw(), nil
 }
 
 func (queries NamedQueries) BuildClassified(
 	cfg *Config,
 	graph entx.Graph,
 ) (
-	searchOnly NamedQueryBuilds,
-	paginatedWithTx NamedQueryBuilds,
-	paginatedWithoutTx NamedQueryBuilds,
+	searchOnly []*NamedQueryBuild,
+	paginatedWithTx []*NamedQueryBuild,
+	paginatedWithoutTx []*NamedQueryBuild,
 	err error,
 ) {
 	for i, q := range queries {
@@ -115,84 +160,6 @@ func (queries NamedQueries) ValidateAndPreprocess(cfg *Config) (count int, err e
 			return
 		}
 		count++
-	}
-	return
-}
-
-type NamedQueryBuilds []*NamedQueryBuild
-
-func (builds NamedQueryBuilds) ExecuteSearchesOnly(
-	ctx context.Context,
-	client entx.Client,
-	cfg *Config,
-	wg *errgroup.Group,
-	searches *common.MapSync[string, *common.SearchResponse],
-) {
-	for _, build := range builds {
-		wg.Go(func() error {
-			res, err := build.ExecuteSearchOnly(ctx, client, cfg)
-			if err != nil {
-				return err
-			}
-			searches.Set(build.Key, res)
-			return nil
-		})
-	}
-}
-
-func (builds NamedQueryBuilds) ExecutePaginatedWithTx(
-	ctx context.Context,
-	client entx.Client,
-	cfg *Config,
-	wg *errgroup.Group,
-	searches *common.MapSync[string, *common.SearchResponse],
-) {
-	for _, build := range builds {
-		wg.Go(func() error {
-			res, err := build.ExecutePaginatedWithTx(ctx, client, cfg)
-			if err != nil {
-				return err
-			}
-			searches.Set(build.Key, res)
-			return nil
-		})
-	}
-}
-
-func (builds NamedQueryBuilds) ExecutePaginatedWithoutTx(
-	ctx context.Context,
-	client entx.Client,
-	cfg *Config,
-	wg *errgroup.Group,
-	searches *common.MapSync[string, *common.SearchResponse],
-	totals *common.MapSync[string, any],
-) (paginations map[string]*common.PaginateInfos) {
-	if lenght := len(builds); lenght > 0 {
-		scalars := make([]*common.ScalarQuery, lenght)
-		paginations = make(map[string]*common.PaginateInfos, lenght)
-
-		for i, build := range builds {
-			wg.Go(func() error {
-				res, err := build.ExecuteSearchOnly(ctx, client, cfg)
-				if err != nil {
-					return err
-				}
-				searches.Set(build.Key, res)
-				return nil
-			})
-
-			scalars[i] = build.Paginate.ToScalarQuery(build.Key)
-			paginations[build.Key] = build.Paginate
-		}
-
-		common.ExecuteScalarGroupsAsync(
-			ctx,
-			wg,
-			client,
-			cfg,
-			totals,
-			common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)...,
-		)
 	}
 	return
 }
