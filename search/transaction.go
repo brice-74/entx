@@ -50,7 +50,7 @@ type TxQueryGroupBuild struct {
 	QueryGroupBuild
 }
 
-func (build *TxQueryGroupBuild) execute(
+func (build *TxQueryGroupBuild) Execute(
 	ctx context.Context,
 	client entx.Client,
 	cfg *Config,
@@ -82,13 +82,13 @@ func (build *TxQueryGroupBuild) execute(
 			}
 
 			if countScalars := len(scalars); countScalars > 0 {
-				scalarsRes, err := common.ExecuteScalarGroupsSync(ctx,
+				scalarsRes := make(map[string]any, countScalars)
+				if err := common.ExecuteScalarGroups(ctx,
 					client,
 					cfg,
-					len(scalars),
+					scalarsRes,
 					common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)...,
-				)
-				if err != nil {
+				); err != nil {
 					return nil, err
 				}
 
@@ -104,8 +104,10 @@ func (build *TxQueryGroupBuild) execute(
 		}
 	}
 
-	if err := common.AttachPagination(res, paginations); err != nil {
-		return nil, err
+	if len(paginations) > 0 && res.Meta != nil {
+		if err := common.AttachPaginationAndClean(res.Searches, res.Meta.Aggregates, paginations); err != nil {
+			return nil, err
+		}
 	}
 
 	return res, nil
@@ -159,7 +161,7 @@ func (group *TxQueryGroup) Execute(
 		return nil, err
 	}
 
-	return build.execute(ctx, client, cfg)
+	return build.Execute(ctx, client, cfg)
 }
 
 func (r *TxQueryGroup) Build(cfg *Config, graph entx.Graph) (*TxQueryGroupBuild, error) {
@@ -246,7 +248,7 @@ func (groups TxQueryGroups) execute(
 	for i, build := range builds {
 		i = i
 		wg.Go(func() error {
-			res, err := build.execute(ctx, client, cfg)
+			res, err := build.Execute(ctx, client, cfg)
 			if err != nil {
 				return err
 			}
