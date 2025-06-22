@@ -1,15 +1,17 @@
-package search
+package dsl
 
 import (
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/brice-74/entx"
+	"github.com/brice-74/entx/search/common"
 )
 
 type Includes []*Include
 
-func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
-	var applies = make([]func(Query), 0, len(incs))
+func (incs Includes) PredicateQs(node entx.Node) ([]func(entx.Query), error) {
+	var applies = make([]func(entx.Query), 0, len(incs))
 	for i, inc := range incs {
 		applicator, err := inc.PredicateQ(node)
 		if err != nil {
@@ -20,9 +22,9 @@ func (incs Includes) PredicateQs(node Node) ([]func(Query), error) {
 	return applies, nil
 }
 
-func (incs Includes) ValidateAndPreprocess(cfg *IncludeConfig) error {
+func (incs Includes) ValidateAndPreprocess(cfg *common.IncludeConfig) error {
 	if cfg == nil {
-		cfg = &IncludeConfig{}
+		cfg = &common.IncludeConfig{}
 	}
 	total := 0
 	for i := range incs {
@@ -31,7 +33,7 @@ func (incs Includes) ValidateAndPreprocess(cfg *IncludeConfig) error {
 		}
 	}
 	if cfg.MaxIncludeTreeCount > 0 && total > cfg.MaxIncludeTreeCount {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxIncludeTreeCount",
 			Err:  fmt.Errorf("includes count exceeds max %d", cfg.MaxIncludeTreeCount),
 		}
@@ -52,16 +54,16 @@ type Include struct {
 	preprocessed  bool
 }
 
-func (inc *Include) PredicateQ(node Node) (func(Query), error) {
+func (inc *Include) PredicateQ(node entx.Node) (func(entx.Query), error) {
 	if !inc.preprocessed {
 		panic("Include.PredicateQ: called before preprocess")
 	}
 	current := node
-	var bridges = make([]Bridge, 0, len(inc.relationParts))
+	var bridges = make([]entx.Bridge, 0, len(inc.relationParts))
 	for _, rel := range inc.relationParts {
 		bridge := current.Bridge(rel)
 		if bridge == nil {
-			return nil, &QueryBuildError{
+			return nil, &common.QueryBuildError{
 				Op:  "Include.PredicateQ",
 				Err: fmt.Errorf("relation %q not found on node %q", rel, current.Name()),
 			}
@@ -104,9 +106,9 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 		return nil, err
 	}
 
-	return func(q Query) {
+	return func(q entx.Query) {
 		var (
-			childQ        Query
+			childQ        entx.Query
 			hasAggregates = len(aggFields) > 0
 		)
 		for i, bridge := range bridges {
@@ -114,11 +116,11 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 			childQ = nil
 
 			if isLastIndex && hasAggregates {
-				bridge.Include(q, func(qChild Query) {
+				bridge.Include(q, func(qChild entx.Query) {
 					childQ = qChild
-				}, AddAggregatesFromValues(aggFields...))
+				}, entx.AddAggregatesFromValues(aggFields...))
 			} else {
-				bridge.Include(q, func(qChild Query) { childQ = qChild })
+				bridge.Include(q, func(qChild entx.Query) { childQ = qChild })
 			}
 
 			childQ.Predicate(inc.Limit.Predicate())
@@ -137,14 +139,14 @@ func (inc *Include) PredicateQ(node Node) (func(Query), error) {
 	}, nil
 }
 
-func (inc *Include) ValidateAndPreprocess(cfg *IncludeConfig) error {
+func (inc *Include) ValidateAndPreprocess(cfg *common.IncludeConfig) error {
 	return Includes{inc}.ValidateAndPreprocess(cfg)
 }
 
-func (inc *Include) walkValidate(cfg *IncludeConfig, depth int, total *int) error {
+func (inc *Include) walkValidate(cfg *common.IncludeConfig, depth int, total *int) error {
 	parts, pos, ok := splitChain(inc.Relation)
 	if !ok {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "InvalidIncludeRelationFormat",
 			Err:  fmt.Errorf("invalid empty relation segment at character %d: %s", pos, inc.Relation),
 		}
@@ -154,7 +156,7 @@ func (inc *Include) walkValidate(cfg *IncludeConfig, depth int, total *int) erro
 	*total += len(parts)
 	depth += len(parts)
 	if cfg.MaxIncludeRelationDepth > 0 && depth > cfg.MaxIncludeRelationDepth {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxIncludeRelationsDepth",
 			Err:  fmt.Errorf("includes depth exceeds max %d", cfg.MaxIncludeRelationDepth),
 		}

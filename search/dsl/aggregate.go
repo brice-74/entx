@@ -1,4 +1,4 @@
-package search
+package dsl
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/brice-74/entx"
+	"github.com/brice-74/entx/search/common"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -40,13 +42,13 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 
 	if resolvedField == "" {
 		if b.Distinct {
-			return nil, "", "", &QueryBuildError{
+			return nil, "", "", &common.QueryBuildError{
 				Op:  "BaseAggregate.buildExpr",
 				Err: fmt.Errorf("cannot use DISTINCT with wildcard '*'; specify a column"),
 			}
 		}
 		if b.Type != AggCount {
-			return nil, "", "", &QueryBuildError{
+			return nil, "", "", &common.QueryBuildError{
 				Op:  "BaseAggregate.buildExpr",
 				Err: fmt.Errorf("aggregate %q on '*' is invalid; only COUNT(*) is allowed", b.Type),
 			}
@@ -66,7 +68,7 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 	case AggCount:
 		fn = sql.Count
 	default:
-		return nil, "", "", &QueryBuildError{
+		return nil, "", "", &common.QueryBuildError{
 			Op:  "BaseAggregate.buildExpr",
 			Err: fmt.Errorf("unsupported aggregate type %q", b.Type),
 		}
@@ -99,9 +101,9 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 	return fn, expr, alias, nil
 }
 
-func (b *BaseAggregate) preprocess(filterCfg *FilterConfig, allowEmptyField bool) error {
+func (b *BaseAggregate) preprocess(filterCfg *common.FilterConfig, allowEmptyField bool) error {
 	if b.Field == "" && !allowEmptyField {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "AggregateFieldNotEmpty",
 			Err:  fmt.Errorf("aggregate field must not be empty"),
 		}
@@ -110,7 +112,7 @@ func (b *BaseAggregate) preprocess(filterCfg *FilterConfig, allowEmptyField bool
 	if b.Field != "" {
 		parts, pos, ok := splitChain(b.Field)
 		if !ok {
-			return &ValidationError{
+			return &common.ValidationError{
 				Rule: "AggregateFieldSyntax",
 				Err:  fmt.Errorf("invalid empty segment at char %d in %q", pos, b.Field),
 			}
@@ -121,14 +123,14 @@ func (b *BaseAggregate) preprocess(filterCfg *FilterConfig, allowEmptyField bool
 	switch b.Type {
 	case AggCount, AggSum, AggAvg, AggMin, AggMax:
 	default:
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "AggregateTypeUnsupported",
 			Err:  fmt.Errorf("unsupported aggregate type %q", b.Type),
 		}
 	}
 
 	if b.Distinct && !(b.Type == AggCount || b.Type == AggSum || b.Type == AggAvg) {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "AggregateDistinctNotAllowed",
 			Err:  fmt.Errorf("DISTINCT not supported for aggregate type %q", b.Type),
 		}
@@ -144,7 +146,7 @@ func (b *BaseAggregate) preprocess(filterCfg *FilterConfig, allowEmptyField bool
 	return nil
 }
 
-func applyBridgesInverseJoins(sel *sql.Selector, bridges []Bridge, base *sql.SelectTable) (*sql.SelectTable, error) {
+func applyBridgesInverseJoins(sel *sql.Selector, bridges []entx.Bridge, base *sql.SelectTable) (*sql.SelectTable, error) {
 	prev := base
 	for i := len(bridges) - 1; i >= 1; i-- {
 		joins := bridges[i].Inverse().Join(sel, prev)
@@ -157,14 +159,14 @@ type Aggregate struct {
 	BaseAggregate
 }
 
-func (a *Aggregate) Predicate(root Node) (func(*sql.Selector), string, error) {
+func (a *Aggregate) Predicate(root entx.Node) (func(*sql.Selector), string, error) {
 	if !a.preprocessed {
 		panic("Aggregate.Predicate: called before preprocess")
 	}
 
 	node, finalField, bridges, err := resolveChain(root, a.fieldParts)
 	if err != nil {
-		return nil, "", &QueryBuildError{
+		return nil, "", &common.QueryBuildError{
 			Op:  "Aggregate.Predicate",
 			Err: err,
 		}
@@ -226,7 +228,7 @@ func (a *Aggregate) Predicate(root Node) (func(*sql.Selector), string, error) {
 
 type Aggregates []*Aggregate
 
-func (as Aggregates) Predicate(node Node) ([]func(*sql.Selector), []string, error) {
+func (as Aggregates) Predicate(node entx.Node) ([]func(*sql.Selector), []string, error) {
 	lenAggregates := len(as)
 	if lenAggregates == 0 {
 		return nil, nil, nil
@@ -248,9 +250,9 @@ func (as Aggregates) Predicate(node Node) ([]func(*sql.Selector), []string, erro
 	return appliesAgg, metaFields, nil
 }
 
-func (ags Aggregates) ValidateAndPreprocess(cfg *AggregateConfig) error {
+func (ags Aggregates) ValidateAndPreprocess(cfg *common.AggregateConfig) error {
 	if cfg == nil {
-		cfg = &AggregateConfig{}
+		cfg = &common.AggregateConfig{}
 	}
 	for _, agg := range ags {
 		if err := agg.ValidateAndPreprocess(cfg); err != nil {
@@ -260,14 +262,14 @@ func (ags Aggregates) ValidateAndPreprocess(cfg *AggregateConfig) error {
 	return nil
 }
 
-func (a *Aggregate) ValidateAndPreprocess(cfg *AggregateConfig) error {
+func (a *Aggregate) ValidateAndPreprocess(cfg *common.AggregateConfig) error {
 	if err := a.BaseAggregate.preprocess(cfg.FilterConfig, true); err != nil {
 		return err
 	}
 
 	depth := len(a.fieldParts) - 1
 	if cfg.MaxAggregateRelationDepth > 0 && depth > cfg.MaxAggregateRelationDepth {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxAggregateRelationsDepth",
 			Err:  fmt.Errorf("aggregate relation depth of %d exceeds max %d", depth, cfg.MaxAggregateRelationDepth),
 		}
@@ -279,10 +281,10 @@ type OverallAggregate struct {
 	BaseAggregate
 }
 
-func (a *OverallAggregate) resolveField(registry Graph) (node Node, field string, err error) {
+func (a *OverallAggregate) resolveField(registry entx.Graph) (node entx.Node, field string, err error) {
 	node = registry[a.fieldParts[0]]
 	if node == nil {
-		err = &QueryBuildError{
+		err = &common.QueryBuildError{
 			Op:  "OverallAggregate.resolveField",
 			Err: fmt.Errorf("node named \"%s\" don't exist", a.fieldParts[0]),
 		}
@@ -293,7 +295,7 @@ func (a *OverallAggregate) resolveField(registry Graph) (node Node, field string
 		if f := node.FieldByName(a.fieldParts[1]); f != nil {
 			field = f.StorageName
 		} else {
-			err = &QueryBuildError{
+			err = &common.QueryBuildError{
 				Op:  "OverallAggregate.resolveField",
 				Err: fmt.Errorf("node \"%s\" don't have field named \"%s\"", node.Name(), a.fieldParts[1]),
 			}
@@ -303,7 +305,7 @@ func (a *OverallAggregate) resolveField(registry Graph) (node Node, field string
 }
 
 // Build constructs a standalone selector for the overall aggregate.
-func (a *OverallAggregate) Build(graph Graph) (*sql.Selector, string, error) {
+func (a *OverallAggregate) Build(graph entx.Graph) (*sql.Selector, string, error) {
 	if !a.preprocessed {
 		panic("OverallAggregate.Build: called before preprocess")
 	}
@@ -339,12 +341,12 @@ func (a *OverallAggregate) Build(graph Graph) (*sql.Selector, string, error) {
 	return sel, alias, nil
 }
 
-func (a *OverallAggregate) BuildScalar(graph Graph) (*ScalarQuery, error) {
+func (a *OverallAggregate) BuildScalar(graph entx.Graph) (*common.ScalarQuery, error) {
 	sel, alias, err := a.Build(graph)
 	if err != nil {
 		return nil, err
 	}
-	sq := &ScalarQuery{
+	sq := &common.ScalarQuery{
 		Selector: sel,
 		Key:      alias,
 	}
@@ -356,14 +358,14 @@ func (a *OverallAggregate) BuildScalar(graph Graph) (*ScalarQuery, error) {
 	return sq, nil
 }
 
-func (oa *OverallAggregate) ValidateAndPreprocess(cfg *Config) error {
+func (oa *OverallAggregate) ValidateAndPreprocess(cfg *common.Config) error {
 	if err := oa.BaseAggregate.preprocess(&cfg.FilterConfig, false); err != nil {
 		return err
 	}
 
 	n := len(oa.fieldParts)
 	if n < 1 || n > 2 {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "OverallAggregateFieldFormat",
 			Err:  fmt.Errorf("overall aggregate field %q must be [entity] or [entity.field]", oa.Field),
 		}
@@ -371,17 +373,15 @@ func (oa *OverallAggregate) ValidateAndPreprocess(cfg *Config) error {
 	return nil
 }
 
-type AggregatesResponse = map[string]any
-
 type OverallAggregates []*OverallAggregate
 
 func (oas OverallAggregates) Execute(
 	ctx context.Context,
-	client Client,
-	graph Graph,
-	cfg *Config,
-) (AggregatesResponse, error) {
-	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	client entx.Client,
+	graph entx.Graph,
+	cfg *common.Config,
+) (common.AggregatesResponse, error) {
+	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
 	err, count := oas.ValidateAndPreprocessFinal(cfg), len(oas)
@@ -394,12 +394,12 @@ func (oas OverallAggregates) Execute(
 		return nil, err
 	}
 
-	chunks := splitInChunks(scalars, cfg.ScalarQueriesChunkSize)
+	chunks := common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)
 
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(min(len(chunks), cfg.MaxParallelWorkersPerRequest))
 
-	res := ExecuteScalarGroupsAsync(wgctx, wg, client, cfg, count, chunks...)
+	res := common.ExecuteScalarGroupsAsync(wgctx, wg, client, cfg, count, chunks...)
 
 	if err := wg.Wait(); err != nil {
 		return nil, err
@@ -408,9 +408,9 @@ func (oas OverallAggregates) Execute(
 	return res, nil
 }
 
-func (oas OverallAggregates) BuildScalars(graph Graph) ([]*ScalarQuery, error) {
+func (oas OverallAggregates) BuildScalars(graph entx.Graph) ([]*common.ScalarQuery, error) {
 	if length := len(oas); length > 0 {
-		var scalars = make([]*ScalarQuery, 0, length)
+		var scalars = make([]*common.ScalarQuery, 0, length)
 
 		for i, oa := range oas {
 			s, err := oa.BuildScalar(graph)
@@ -423,16 +423,16 @@ func (oas OverallAggregates) BuildScalars(graph Graph) ([]*ScalarQuery, error) {
 	return nil, nil
 }
 
-func (oas OverallAggregates) ValidateAndPreprocessFinal(cfg *Config) error {
+func (oas OverallAggregates) ValidateAndPreprocessFinal(cfg *common.Config) error {
 	count, err := oas.ValidateAndPreprocess(cfg)
 	if err != nil {
 		return err
 	}
 
-	return checkMaxAggregates(cfg, count)
+	return common.CheckMaxAggregates(cfg, count)
 }
 
-func (oas OverallAggregates) ValidateAndPreprocess(cfg *Config) (count int, err error) {
+func (oas OverallAggregates) ValidateAndPreprocess(cfg *common.Config) (count int, err error) {
 	for _, oa := range oas {
 		if err = oa.ValidateAndPreprocess(cfg); err != nil {
 			return

@@ -1,55 +1,6 @@
-package search
+package common
 
 import "entgo.io/ent/dialect/sql"
-
-type Pageable struct {
-	Page int `json:"page,omitempty"`
-	Limit
-}
-
-func (p *Pageable) Predicate(useOffset bool) func(s *sql.Selector) {
-	return func(s *sql.Selector) {
-		s.Limit(p.Limit.Limit)
-		if useOffset && p.Page > 1 {
-			s.Offset((p.Page - 1) * p.Limit.Limit)
-		}
-	}
-}
-
-func (p *Pageable) Sanitize(c *PageableConfig) {
-	p.Limit.Sanitize(c)
-	if p.Page < 1 {
-		p.Page = 1
-	}
-}
-
-type Limit struct {
-	Limit int `json:"limit,omitempty"`
-}
-
-func (l *Limit) Predicate() func(s *sql.Selector) {
-	return func(s *sql.Selector) {
-		s.Limit(l.Limit)
-	}
-}
-
-func (l *Limit) Sanitize(c *PageableConfig) {
-	if l.Limit <= 0 {
-		l.Limit = c.DefaultLimit
-	}
-	if l.Limit > c.MaxLimit {
-		l.Limit = c.MaxLimit
-	}
-}
-
-type CompositePaginateInfos struct {
-	Key string
-	PaginateInfos
-}
-
-func (p *CompositePaginateInfos) ToScalarQuery() *ScalarQuery {
-	return p.PaginateInfos.ToScalarQuery(p.Key)
-}
 
 type PaginateResponse struct {
 	From        int `json:"from"`

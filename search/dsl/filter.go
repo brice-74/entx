@@ -1,9 +1,11 @@
-package search
+package dsl
 
 import (
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/brice-74/entx"
+	"github.com/brice-74/entx/search/common"
 )
 
 type Operator string
@@ -23,7 +25,7 @@ const (
 
 type Filters []*Filter
 
-func (fs Filters) Predicate(node Node) ([]func(*sql.Selector), error) {
+func (fs Filters) Predicate(node entx.Node) ([]func(*sql.Selector), error) {
 	if len(fs) == 0 {
 		return nil, nil
 	}
@@ -39,9 +41,9 @@ func (fs Filters) Predicate(node Node) ([]func(*sql.Selector), error) {
 	return preds, nil
 }
 
-func (fs Filters) ValidateAndPreprocess(cfg *FilterConfig) error {
+func (fs Filters) ValidateAndPreprocess(cfg *common.FilterConfig) error {
 	if cfg == nil {
-		cfg = &FilterConfig{}
+		cfg = &common.FilterConfig{}
 	}
 	var (
 		totalFilters   int
@@ -53,13 +55,13 @@ func (fs Filters) ValidateAndPreprocess(cfg *FilterConfig) error {
 		}
 	}
 	if cfg.MaxFilterTreeCount > 0 && totalFilters > cfg.MaxFilterTreeCount {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxFilterTreeCount",
 			Err:  fmt.Errorf("filters count exceeds max %d", cfg.MaxFilterTreeCount),
 		}
 	}
 	if cfg.MaxRelationTotalCount > 0 && totalRelations > cfg.MaxRelationTotalCount {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxFilterRelationsPerTree",
 			Err:  fmt.Errorf("relations count exceeds max %d", cfg.MaxRelationTotalCount),
 		}
@@ -81,14 +83,14 @@ type Filter struct {
 	preprocessed  bool
 }
 
-func (f *Filter) Predicate(node Node) (func(*sql.Selector), error) {
+func (f *Filter) Predicate(node entx.Node) (func(*sql.Selector), error) {
 	if !f.preprocessed {
 		panic("Filter.Predicate: called before preprocess")
 	}
 	if len(f.relationParts) > 0 {
 		finalNode, compose, err := resolveFilterChain(node, f.relationParts)
 		if err != nil {
-			return nil, &QueryBuildError{
+			return nil, &common.QueryBuildError{
 				Op:  "Filter.Predicate",
 				Err: err,
 			}
@@ -104,7 +106,7 @@ func (f *Filter) Predicate(node Node) (func(*sql.Selector), error) {
 
 // resolveFilterChain navigates a sequence of relations, returning the final Node
 // and a function to wrap a predicate across the chain.
-func resolveFilterChain(node Node, rels []string) (Node, func(func(*sql.Selector)) func(*sql.Selector), error) {
+func resolveFilterChain(node entx.Node, rels []string) (entx.Node, func(func(*sql.Selector)) func(*sql.Selector), error) {
 	final, _, bridges, err := resolveChain(node, rels)
 	if err != nil {
 		return nil, nil, err
@@ -122,7 +124,7 @@ func resolveFilterChain(node Node, rels []string) (Node, func(func(*sql.Selector
 }
 
 // localPredicate builds predicates for Not, Or, And and the leaf condition.
-func (f *Filter) localPredicate(node Node) (func(*sql.Selector), error) {
+func (f *Filter) localPredicate(node entx.Node) (func(*sql.Selector), error) {
 	var preds []func(*sql.Selector)
 
 	if f.Not != nil {
@@ -161,7 +163,7 @@ func (f *Filter) localPredicate(node Node) (func(*sql.Selector), error) {
 	}
 }
 
-func (f *Filter) buildCondition(node Node) (func(*sql.Selector), error) {
+func (f *Filter) buildCondition(node entx.Node) (func(*sql.Selector), error) {
 	lenFieldParts := len(f.fieldParts)
 	relations := f.fieldParts[:lenFieldParts-1]
 	field := f.fieldParts[lenFieldParts-1]
@@ -169,7 +171,7 @@ func (f *Filter) buildCondition(node Node) (func(*sql.Selector), error) {
 	if lenFieldParts > 1 {
 		_, compose, err := resolveFilterChain(node, relations)
 		if err != nil {
-			return nil, &QueryBuildError{
+			return nil, &common.QueryBuildError{
 				Op:  "Filter.buildCondition",
 				Err: err,
 			}
@@ -185,7 +187,7 @@ func (f *Filter) buildCondition(node Node) (func(*sql.Selector), error) {
 
 	base, err := buildBasePredicate(field, f.Operator, f.Value)
 	if err != nil {
-		return nil, &QueryBuildError{
+		return nil, &common.QueryBuildError{
 			Op:  "Filter.buildCondition",
 			Err: err,
 		}
@@ -224,7 +226,7 @@ func buildBasePredicate(
 	}
 }
 
-func (f *Filter) ValidateAndPreprocess(cfg *FilterConfig) error {
+func (f *Filter) ValidateAndPreprocess(cfg *common.FilterConfig) error {
 	return Filters{f}.ValidateAndPreprocess(cfg)
 }
 
@@ -234,7 +236,7 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 	if f.Relation != "" {
 		parts, pos, ok := splitChain(f.Relation)
 		if !ok {
-			return &ValidationError{
+			return &common.ValidationError{
 				Rule: "InvalidFilterRelationFormat",
 				Err:  fmt.Errorf("invalid empty relation segment at character %d: %s", pos, f.Relation),
 			}
@@ -247,7 +249,7 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 	if f.Field != "" {
 		parts, pos, ok := splitChain(f.Field)
 		if !ok {
-			return &ValidationError{
+			return &common.ValidationError{
 				Rule: "InvalidFilterFieldFormat",
 				Err:  fmt.Errorf("invalid empty field segment at character %d: %s", pos, f.Relation),
 			}
@@ -260,7 +262,7 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 	}
 
 	if maxDepth > 0 && currentDepth > maxDepth {
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "MaxRelationChainDepth",
 			Err:  fmt.Errorf("filters nesting depth exceeds max %d", maxDepth),
 		}

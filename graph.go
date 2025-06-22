@@ -1,4 +1,4 @@
-package search
+package entx
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
-type Graph = map[string]Node
-
 type (
+	Graph = map[string]Node
+
 	Transaction interface {
 		Rollback() error
 		Commit() error
@@ -28,7 +28,9 @@ type (
 		Query() Query
 	}
 
-	EntityMeta = AggregatesMeta
+	EntityMeta struct {
+		Aggregates map[string]any `json:"aggregates,omitempty"`
+	}
 
 	Entity interface {
 		Metadatas() *EntityMeta
@@ -63,15 +65,17 @@ type (
 		Child() Node
 		Parent() Node
 	}
-)
 
-type RelationInfos struct {
-	RelType sqlgraph.Rel
-	// used by O2O, O2M, M2O and M2M relations
-	FinalLeftField  string
-	FinalRightField string
-	// used only by M2M relation
-	PivotTable      string
-	PivotLeftField  string
-	PivotRightField string
-}
+	RelationInfos struct {
+		RelType sqlgraph.Rel
+		// used by O2O, O2M, M2O and M2M relations
+		FinalLeftField  string
+		FinalRightField string
+		// used only by M2M relation
+		PivotTable      string
+		PivotLeftField  string
+		PivotRightField string
+	}
+
+	EntityHandler func(entities []Entity) error
+)

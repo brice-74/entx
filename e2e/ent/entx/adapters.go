@@ -3,28 +3,28 @@
 package entx
 
 import (
-   "errors"
-   "context"
-   "fmt"
+  "errors"
+  "context"
+  "fmt"
 
-   "github.com/brice-74/entx/search"
+  "github.com/brice-74/entx"
 
-   stdsql "database/sql"
+  stdsql "database/sql"
 
-   "entgo.io/ent/dialect/sql"
+  "entgo.io/ent/dialect/sql"
 
-   "e2e/ent"
+  "e2e/ent"
 )
 
 type Client struct {
-   *ent.Client
+  *ent.Client
 }
 
 func NewClient(c *ent.Client) *Client {
-   return &Client{c}
+  return &Client{c}
 }
 
-func (c *Client) Tx(ctx context.Context, opts *stdsql.TxOptions) (search.Transaction, search.Client, error) {
+func (c *Client) Tx(ctx context.Context, opts *stdsql.TxOptions) (entx.Transaction, entx.Client, error) {
 	tx, err := c.Client.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, nil, err
@@ -33,245 +33,245 @@ func (c *Client) Tx(ctx context.Context, opts *stdsql.TxOptions) (search.Transac
 	return tx, NewClient(tx.Client()), nil
 }
 
-func (c *Client) GetEntityClient(n search.Node) (search.EntityClient, error) {
-   if n == nil {
-      return nil, errors.New("node is nil")
-   }
+func (c *Client) GetEntityClient(n entx.Node) (entx.EntityClient, error) {
+  if n == nil {
+    return nil, errors.New("node is nil")
+  }
 
-   switch nodeName := n.Name(); nodeName {
-   case "Article":
-      return &ArticleClient{ ArticleClient: c.Client.Article}, nil
-   case "ArticleTag":
-      return &ArticleTagClient{ ArticleTagClient: c.Client.ArticleTag}, nil
-   case "Comment":
-      return &CommentClient{ CommentClient: c.Client.Comment}, nil
-   case "Department":
-      return &DepartmentClient{ DepartmentClient: c.Client.Department}, nil
-   case "Employee":
-      return &EmployeeClient{ EmployeeClient: c.Client.Employee}, nil
-   case "Tag":
-      return &TagClient{ TagClient: c.Client.Tag}, nil
-   case "User":
-      return &UserClient{ UserClient: c.Client.User}, nil
-   default:
-      return nil, fmt.Errorf("node named \"%s\" hasn't client", nodeName)
-   }
+  switch nodeName := n.Name(); nodeName {
+  case "Article":
+    return &ArticleClient{ ArticleClient: c.Client.Article}, nil
+  case "ArticleTag":
+    return &ArticleTagClient{ ArticleTagClient: c.Client.ArticleTag}, nil
+  case "Comment":
+    return &CommentClient{ CommentClient: c.Client.Comment}, nil
+  case "Department":
+    return &DepartmentClient{ DepartmentClient: c.Client.Department}, nil
+  case "Employee":
+    return &EmployeeClient{ EmployeeClient: c.Client.Employee}, nil
+  case "Tag":
+    return &TagClient{ TagClient: c.Client.Tag}, nil
+  case "User":
+    return &UserClient{ UserClient: c.Client.User}, nil
+  default:
+    return nil, fmt.Errorf("node named \"%s\" hasn't client", nodeName)
+  }
 }
 
-func (c *Client) MustGetEntityClient(n search.Node) search.EntityClient {
-   ec, err := c.GetEntityClient(n)
-   if err != nil {
-      panic(err)
-   }
-   return ec
+func (c *Client) MustGetEntityClient(n entx.Node) entx.EntityClient {
+  ec, err := c.GetEntityClient(n)
+  if err != nil {
+    panic(err)
+  }
+  return ec
 }
 type ArticleClient struct {
-   *ent.ArticleClient
+  *ent.ArticleClient
 }
 
-func (c *ArticleClient) Query()  search.Query {
-   return &ArticleQuery{c.ArticleClient.Query()}
+func (c *ArticleClient) Query()  entx.Query {
+  return &ArticleQuery{c.ArticleClient.Query()}
 }
 
 type ArticleQuery struct {
-   *ent.ArticleQuery
+  *ent.ArticleQuery
 }
 
-func (q *ArticleQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.ArticleQuery.Modify(preds...)
-   return q
+func (q *ArticleQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.ArticleQuery.Modify(preds...)
+  return q
 }
 
-func (q *ArticleQuery) Select(columns ...string) search.Query {
-   q.ArticleQuery.Select(columns...)
-   return q
+func (q *ArticleQuery) Select(columns ...string) entx.Query {
+  q.ArticleQuery.Select(columns...)
+  return q
 }
 
-func (q *ArticleQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.ArticleQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *ArticleQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.ArticleQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type ArticleTagClient struct {
-   *ent.ArticleTagClient
+  *ent.ArticleTagClient
 }
 
-func (c *ArticleTagClient) Query()  search.Query {
-   return &ArticleTagQuery{c.ArticleTagClient.Query()}
+func (c *ArticleTagClient) Query()  entx.Query {
+  return &ArticleTagQuery{c.ArticleTagClient.Query()}
 }
 
 type ArticleTagQuery struct {
-   *ent.ArticleTagQuery
+  *ent.ArticleTagQuery
 }
 
-func (q *ArticleTagQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.ArticleTagQuery.Modify(preds...)
-   return q
+func (q *ArticleTagQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.ArticleTagQuery.Modify(preds...)
+  return q
 }
 
-func (q *ArticleTagQuery) Select(columns ...string) search.Query {
-   q.ArticleTagQuery.Select(columns...)
-   return q
+func (q *ArticleTagQuery) Select(columns ...string) entx.Query {
+  q.ArticleTagQuery.Select(columns...)
+  return q
 }
 
-func (q *ArticleTagQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.ArticleTagQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *ArticleTagQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.ArticleTagQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type CommentClient struct {
-   *ent.CommentClient
+  *ent.CommentClient
 }
 
-func (c *CommentClient) Query()  search.Query {
-   return &CommentQuery{c.CommentClient.Query()}
+func (c *CommentClient) Query()  entx.Query {
+  return &CommentQuery{c.CommentClient.Query()}
 }
 
 type CommentQuery struct {
-   *ent.CommentQuery
+  *ent.CommentQuery
 }
 
-func (q *CommentQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.CommentQuery.Modify(preds...)
-   return q
+func (q *CommentQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.CommentQuery.Modify(preds...)
+  return q
 }
 
-func (q *CommentQuery) Select(columns ...string) search.Query {
-   q.CommentQuery.Select(columns...)
-   return q
+func (q *CommentQuery) Select(columns ...string) entx.Query {
+  q.CommentQuery.Select(columns...)
+  return q
 }
 
-func (q *CommentQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.CommentQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *CommentQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.CommentQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type DepartmentClient struct {
-   *ent.DepartmentClient
+  *ent.DepartmentClient
 }
 
-func (c *DepartmentClient) Query()  search.Query {
-   return &DepartmentQuery{c.DepartmentClient.Query()}
+func (c *DepartmentClient) Query()  entx.Query {
+  return &DepartmentQuery{c.DepartmentClient.Query()}
 }
 
 type DepartmentQuery struct {
-   *ent.DepartmentQuery
+  *ent.DepartmentQuery
 }
 
-func (q *DepartmentQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.DepartmentQuery.Modify(preds...)
-   return q
+func (q *DepartmentQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.DepartmentQuery.Modify(preds...)
+  return q
 }
 
-func (q *DepartmentQuery) Select(columns ...string) search.Query {
-   q.DepartmentQuery.Select(columns...)
-   return q
+func (q *DepartmentQuery) Select(columns ...string) entx.Query {
+  q.DepartmentQuery.Select(columns...)
+  return q
 }
 
-func (q *DepartmentQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.DepartmentQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *DepartmentQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.DepartmentQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type EmployeeClient struct {
-   *ent.EmployeeClient
+  *ent.EmployeeClient
 }
 
-func (c *EmployeeClient) Query()  search.Query {
-   return &EmployeeQuery{c.EmployeeClient.Query()}
+func (c *EmployeeClient) Query()  entx.Query {
+  return &EmployeeQuery{c.EmployeeClient.Query()}
 }
 
 type EmployeeQuery struct {
-   *ent.EmployeeQuery
+  *ent.EmployeeQuery
 }
 
-func (q *EmployeeQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.EmployeeQuery.Modify(preds...)
-   return q
+func (q *EmployeeQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.EmployeeQuery.Modify(preds...)
+  return q
 }
 
-func (q *EmployeeQuery) Select(columns ...string) search.Query {
-   q.EmployeeQuery.Select(columns...)
-   return q
+func (q *EmployeeQuery) Select(columns ...string) entx.Query {
+  q.EmployeeQuery.Select(columns...)
+  return q
 }
 
-func (q *EmployeeQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.EmployeeQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *EmployeeQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.EmployeeQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type TagClient struct {
-   *ent.TagClient
+  *ent.TagClient
 }
 
-func (c *TagClient) Query()  search.Query {
-   return &TagQuery{c.TagClient.Query()}
+func (c *TagClient) Query()  entx.Query {
+  return &TagQuery{c.TagClient.Query()}
 }
 
 type TagQuery struct {
-   *ent.TagQuery
+  *ent.TagQuery
 }
 
-func (q *TagQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.TagQuery.Modify(preds...)
-   return q
+func (q *TagQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.TagQuery.Modify(preds...)
+  return q
 }
 
-func (q *TagQuery) Select(columns ...string) search.Query {
-   q.TagQuery.Select(columns...)
-   return q
+func (q *TagQuery) Select(columns ...string) entx.Query {
+  q.TagQuery.Select(columns...)
+  return q
 }
 
-func (q *TagQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.TagQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *TagQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.TagQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }
 type UserClient struct {
-   *ent.UserClient
+  *ent.UserClient
 }
 
-func (c *UserClient) Query()  search.Query {
-   return &UserQuery{c.UserClient.Query()}
+func (c *UserClient) Query()  entx.Query {
+  return &UserQuery{c.UserClient.Query()}
 }
 
 type UserQuery struct {
-   *ent.UserQuery
+  *ent.UserQuery
 }
 
-func (q *UserQuery) Predicate(preds ...func(s *sql.Selector)) search.Query {
-   q.UserQuery.Modify(preds...)
-   return q
+func (q *UserQuery) Predicate(preds ...func(s *sql.Selector)) entx.Query {
+  q.UserQuery.Modify(preds...)
+  return q
 }
 
-func (q *UserQuery) Select(columns ...string) search.Query {
-   q.UserQuery.Select(columns...)
-   return q
+func (q *UserQuery) Select(columns ...string) entx.Query {
+  q.UserQuery.Select(columns...)
+  return q
 }
 
-func (q *UserQuery) All(ctx context.Context) ([]search.Entity, error) {
-   entities, err := q.UserQuery.All(ctx)
-   if err != nil {
-      return nil, err
-   }
+func (q *UserQuery) All(ctx context.Context) ([]entx.Entity, error) {
+  entities, err := q.UserQuery.All(ctx)
+  if err != nil {
+    return nil, err
+  }
 
-   return search.ToEntitySlice(entities), nil
+  return entx.ToEntitySlice(entities), nil
 }

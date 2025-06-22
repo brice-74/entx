@@ -12,7 +12,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/brice-74/entx/search"
+	"github.com/brice-74/entx"
 )
 
 // Employee is the model entity for the Employee schema.
@@ -33,7 +33,7 @@ type Employee struct {
 	Edges        EmployeeEdges `json:"edges"`
 	selectValues sql.SelectValues
 	// Meta is used by entx search to add metadata to the response.
-	Meta *search.EntityMeta `json:"meta,omitempty"`
+	Meta *entx.EntityMeta `json:"meta,omitempty"`
 }
 
 // EmployeeEdges holds the relations/edges for other nodes in the graph.
@@ -219,9 +219,9 @@ func (e *Employee) String() string {
 }
 
 // Metadatas allow you to retrieve or edit metadatas
-func (e *Employee) Metadatas() *search.EntityMeta {
+func (e *Employee) Metadatas() *entx.EntityMeta {
 	if e.Meta == nil {
-		e.Meta = new(search.EntityMeta)
+		e.Meta = new(entx.EntityMeta)
 	}
 	return e.Meta
 }

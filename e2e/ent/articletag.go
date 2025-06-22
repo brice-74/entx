@@ -11,7 +11,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/brice-74/entx/search"
+	"github.com/brice-74/entx"
 )
 
 // ArticleTag is the model entity for the ArticleTag schema.
@@ -26,7 +26,7 @@ type ArticleTag struct {
 	Edges        ArticleTagEdges `json:"edges"`
 	selectValues sql.SelectValues
 	// Meta is used by entx search to add metadata to the response.
-	Meta *search.EntityMeta `json:"meta,omitempty"`
+	Meta *entx.EntityMeta `json:"meta,omitempty"`
 }
 
 // ArticleTagEdges holds the relations/edges for other nodes in the graph.
@@ -151,9 +151,9 @@ func (at *ArticleTag) String() string {
 }
 
 // Metadatas allow you to retrieve or edit metadatas
-func (e *ArticleTag) Metadatas() *search.EntityMeta {
+func (e *ArticleTag) Metadatas() *entx.EntityMeta {
 	if e.Meta == nil {
-		e.Meta = new(search.EntityMeta)
+		e.Meta = new(entx.EntityMeta)
 	}
 	return e.Meta
 }

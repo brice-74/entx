@@ -7,17 +7,18 @@ import (
 	stdsql "database/sql"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/brice-74/entx"
+	"github.com/brice-74/entx/search/common"
+	"github.com/brice-74/entx/search/dsl"
 	"golang.org/x/sync/errgroup"
 )
 
 type NamedQueries []*NamedQuery
 
-type SearchesResponse = map[string]*SearchResponse
-
 func (queries NamedQueries) Execute(
 	ctx context.Context,
-	client Client,
-	graph Graph,
+	client entx.Client,
+	graph entx.Graph,
 	cfg *Config,
 ) (SearchesResponse, error) {
 	// TODO
@@ -26,7 +27,7 @@ func (queries NamedQueries) Execute(
 
 func (queries NamedQueries) BuildClassified(
 	conf *Config,
-	graph Graph,
+	graph entx.Graph,
 ) (
 	searchOnly []*NamedQueryBuild,
 	paginatedWithTx []*NamedQueryBuild,
@@ -51,7 +52,7 @@ func (queries NamedQueries) BuildClassified(
 	return
 }
 
-func (queries NamedQueries) Build(conf *Config, graph Graph) ([]*NamedQueryBuild, error) {
+func (queries NamedQueries) Build(conf *Config, graph entx.Graph) ([]*NamedQueryBuild, error) {
 	var builds = make([]*NamedQueryBuild, 0, len(queries))
 	for i, q := range queries {
 		build, err := q.Build(i, conf, graph)
@@ -69,7 +70,7 @@ func (queries NamedQueries) ValidateAndPreprocessFinal(cfg *Config) error {
 		return err
 	}
 
-	return checkMaxSearches(cfg, count)
+	return common.CheckMaxSearches(cfg, count)
 }
 
 func (queries NamedQueries) ValidateAndPreprocess(cfg *Config) (count int, err error) {
@@ -92,7 +93,7 @@ type NamedQuery struct {
 	TargetedQuery
 }
 
-func (q *NamedQuery) Build(uniqueIndex int, conf *Config, graph Graph) (
+func (q *NamedQuery) Build(uniqueIndex int, conf *Config, graph entx.Graph) (
 	*NamedQueryBuild,
 	error,
 ) {
@@ -118,11 +119,11 @@ type TargetedQuery struct {
 
 func (q *TargetedQuery) Execute(
 	ctx context.Context,
-	client Client,
-	graph Graph,
+	client entx.Client,
+	graph entx.Graph,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
 	if err := q.ValidateAndPreprocess(cfg); err != nil {
@@ -139,7 +140,7 @@ func (q *TargetedQuery) Execute(
 
 func (q *TargetedQuery) Build(
 	conf *Config,
-	registry Graph,
+	registry entx.Graph,
 ) (*QueryOptionsBuild, error) {
 	node, found := registry[q.From]
 	if !found {
@@ -153,36 +154,26 @@ func (q *TargetedQuery) Build(
 }
 
 type QueryOptions struct {
-	Select         Select     `json:"select,omitempty"`
-	Filters        Filters    `json:"filters,omitempty"`
-	Includes       Includes   `json:"includes,omitempty"`
-	Sort           Sorts      `json:"sort,omitempty"`
-	Aggregates     Aggregates `json:"aggregates,omitempty"`
-	WithPagination bool       `json:"with_pagination,omitempty"`
+	Select         dsl.Select     `json:"select,omitempty"`
+	Filters        dsl.Filters    `json:"filters,omitempty"`
+	Includes       dsl.Includes   `json:"includes,omitempty"`
+	Sort           dsl.Sorts      `json:"sort,omitempty"`
+	Aggregates     dsl.Aggregates `json:"aggregates,omitempty"`
+	WithPagination bool           `json:"with_pagination,omitempty"`
 	// Enable transaction between query and pagination.
 	// Has no effect if there is no pagination or in a TxQueryGroup.
 	EnableTransaction         *bool                  `json:"enable_transaction,omitempty"`
 	TransactionIsolationLevel *stdsql.IsolationLevel `json:"transaction_isolation_level,omitempty"`
-	Pageable
-}
-
-type SearchMeta struct {
-	Paginate *PaginateResponse `json:"paginate,omitempty"`
-	Count    int               `json:"count,omitempty"`
-}
-
-type SearchResponse struct {
-	Data any         `json:"data,omitempty"`
-	Meta *SearchMeta `json:"meta,omitempty"`
+	dsl.Pageable
 }
 
 func (qo *QueryOptions) Execute(
 	ctx context.Context,
-	client Client,
-	node Node,
+	client entx.Client,
+	node entx.Node,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := contextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
 	if err := qo.ValidateAndPreprocess(cfg); err != nil {
@@ -199,7 +190,7 @@ func (qo *QueryOptions) Execute(
 
 func (qo *QueryOptions) execute(
 	ctx context.Context,
-	client Client,
+	client entx.Client,
 	cfg *Config,
 	build *QueryOptionsBuild,
 ) (*SearchResponse, error) {
@@ -212,7 +203,7 @@ func (qo *QueryOptions) execute(
 		return qo.runGo(ctx, client, build, cfg)
 	}
 	// run search without pagination
-	ctx, cancel := contextTimeout(ctx, cfg.QueryTimeout)
+	ctx, cancel := common.ContextTimeout(ctx, cfg.QueryTimeout)
 	defer cancel()
 
 	data, count, err := build.ExecFn(ctx, client)
@@ -220,12 +211,12 @@ func (qo *QueryOptions) execute(
 		return nil, err
 	}
 
-	return &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}, nil
+	return &SearchResponse{Data: data, Meta: &MetaSearchResponse{Count: count}}, nil
 }
 
 func (qo *QueryOptions) runGo(
 	ctx context.Context,
-	client Client,
+	client entx.Client,
 	build *QueryOptionsBuild,
 	cfg *Config,
 ) (*SearchResponse, error) {
@@ -238,7 +229,7 @@ func (qo *QueryOptions) runGo(
 	)
 
 	wg.Go(func() (err error) {
-		ctx, cancel := contextTimeout(wgctx, cfg.QueryTimeout)
+		ctx, cancel := common.ContextTimeout(wgctx, cfg.QueryTimeout)
 		defer cancel()
 
 		data, count, err := build.ExecFn(ctx, client)
@@ -246,15 +237,15 @@ func (qo *QueryOptions) runGo(
 			return err
 		}
 
-		searchResponse = &SearchResponse{Data: data, Meta: &SearchMeta{Count: count}}
+		searchResponse = &SearchResponse{Data: data, Meta: &MetaSearchResponse{Count: count}}
 		return nil
 	})
 
 	wg.Go(func() (err error) {
-		ctx, cancel := contextTimeout(wgctx, cfg.AggregateTimeout)
+		ctx, cancel := common.ContextTimeout(wgctx, cfg.AggregateTimeout)
 		defer cancel()
 
-		raw, err := ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+		raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
 		if err != nil {
 			return err
 		}
@@ -282,23 +273,23 @@ func (qo *QueryOptions) runGo(
 
 func (qo *QueryOptions) runTx(
 	ctx context.Context,
-	client Client,
+	client entx.Client,
 	build *QueryOptionsBuild,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := contextTimeout(ctx, cfg.Transaction.Timeout)
+	ctx, cancel := common.ContextTimeout(ctx, cfg.Transaction.Timeout)
 	defer cancel()
 
 	return WithTx(ctx, client, &stdsql.TxOptions{
 		ReadOnly:  true,
 		Isolation: build.TransactionIsolationLevel,
-	}, func(ctx context.Context, client Client) (*SearchResponse, error) {
+	}, func(ctx context.Context, client entx.Client) (*SearchResponse, error) {
 		data, count, err := build.ExecFn(ctx, client)
 		if err != nil {
 			return nil, err
 		}
 
-		raw, err := ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
+		raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
 		if err != nil {
 			return nil, err
 		}
@@ -313,7 +304,7 @@ func (qo *QueryOptions) runTx(
 
 		return &SearchResponse{
 			Data: data,
-			Meta: &SearchMeta{
+			Meta: &MetaSearchResponse{
 				Count:    count,
 				Paginate: build.Paginate.Calculate(int(total), count),
 			},
@@ -322,8 +313,8 @@ func (qo *QueryOptions) runTx(
 }
 
 type QueryOptionsBuild struct {
-	ExecFn                    func(context.Context, Client) (any, int, error)
-	Paginate                  *PaginateInfos
+	ExecFn                    func(context.Context, entx.Client) (any, int, error)
+	Paginate                  *common.PaginateInfos
 	EnableTransaction         bool
 	TransactionIsolationLevel stdsql.IsolationLevel
 }
@@ -343,7 +334,7 @@ func (build *QueryOptionsBuild) IsPaginatedWithoutTx() bool {
 
 func (qo *QueryOptions) Build(
 	conf *Config,
-	node Node,
+	node entx.Node,
 ) (*QueryOptionsBuild, error) {
 	var (
 		aggFields []string
@@ -386,7 +377,7 @@ func (qo *QueryOptions) Build(
 		return nil, err
 	}
 
-	execute := func(ctx context.Context, client Client) (any, int, error) {
+	execute := func(ctx context.Context, client entx.Client) (any, int, error) {
 		q := node.NewQuery(client).Predicate(preds...)
 
 		for _, apply := range incApplies {
@@ -403,7 +394,7 @@ func (qo *QueryOptions) Build(
 			}
 		}
 		if len(aggFields) > 0 {
-			if err := AddAggregatesFromValues(aggFields...)(entities); err != nil {
+			if err := entx.AddAggregatesFromValues(aggFields...)(entities); err != nil {
 				panic(err)
 			}
 		}
@@ -425,7 +416,7 @@ func (qo *QueryOptions) Build(
 	}
 
 	if countSel != nil {
-		res.Paginate = &PaginateInfos{
+		res.Paginate = &common.PaginateInfos{
 			CountSelector: countSel,
 			Page:          qo.Page,
 			Limit:         qo.Limit.Limit,
@@ -435,7 +426,7 @@ func (qo *QueryOptions) Build(
 	return &res, err
 }
 
-func (qo *QueryOptions) scalarCountSelector(node Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
+func (qo *QueryOptions) scalarCountSelector(node entx.Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
 	if !qo.WithPagination {
 		return nil, nil
 	}
@@ -471,27 +462,4 @@ func (qo *QueryOptions) ValidateAndPreprocess(c *Config) (err error) {
 	}
 	qo.Pageable.Sanitize(&c.PageableConfig)
 	return
-}
-
-type Select []string
-
-func (s Select) PredicateQ(node Node) (func(q Query), error) {
-	if len(s) > 0 {
-		for i, v := range s {
-			f := node.FieldByName(v)
-			if f == nil {
-				return nil, &QueryBuildError{
-					Op:  "Select.PredicateQ",
-					Err: fmt.Errorf("node %q has no field named %q", node.Name(), v),
-				}
-			}
-			s[i] = f.StorageName
-		}
-
-		return func(q Query) {
-			q.Select(s...)
-		}, nil
-	}
-
-	return func(q Query) {}, nil
 }

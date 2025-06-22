@@ -1,9 +1,15 @@
-package search
+package common
 
 import (
 	"database/sql"
 	"time"
 )
+
+type SortConfig struct {
+	// MaxSortRelationDepth is the maximum allowed nesting depth for sorting fields
+	// (number of relationship hops + field segments).
+	MaxSortRelationDepth int
+}
 
 type PageableConfig struct {
 	// MaxLimit is the maximum number of items allowed per page.
@@ -12,23 +18,6 @@ type PageableConfig struct {
 	DefaultLimit int
 }
 
-type SortConfig struct {
-	// MaxSortRelationDepth is the maximum allowed nesting depth for sorting fields
-	// (number of relationship hops + field segments).
-	MaxSortRelationDepth int
-}
-
-// FilterConfig defines limits on filtering expressions.
-type FilterConfig struct {
-	// MaxFilterTreeCount is the maximum number of Filter nodes allowed in a single filter tree.
-	MaxFilterTreeCount int
-	// MaxRelationChainDepth is the maximum depth allowed per filter,
-	// counting both relation segments and field segments.
-	MaxRelationChainDepth int
-	// MaxRelationTotalCount is the total number of relation segments permitted
-	// across the entire filter tree.
-	MaxRelationTotalCount int
-}
 type IncludeConfig struct {
 	// MaxIncludeTreeCount is the total number of Include nodes allowed in one include tree.
 	MaxIncludeTreeCount int
@@ -44,6 +33,18 @@ type AggregateConfig struct {
 	// allowed for an aggregate’s target field.
 	MaxAggregateRelationDepth int
 	*FilterConfig
+}
+
+// FilterConfig defines limits on filtering expressions.
+type FilterConfig struct {
+	// MaxFilterTreeCount is the maximum number of Filter nodes allowed in a single filter tree.
+	MaxFilterTreeCount int
+	// MaxRelationChainDepth is the maximum depth allowed per filter,
+	// counting both relation segments and field segments.
+	MaxRelationChainDepth int
+	// MaxRelationTotalCount is the total number of relation segments permitted
+	// across the entire filter tree.
+	MaxRelationTotalCount int
 }
 
 type Option func(*Config)

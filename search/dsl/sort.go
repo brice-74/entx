@@ -1,4 +1,4 @@
-package search
+package dsl
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/brice-74/entx"
+	"github.com/brice-74/entx/search/common"
 )
 
 type Direction string
@@ -18,7 +20,7 @@ const (
 
 type Sorts []*Sort
 
-func (ss Sorts) Predicate(node Node) ([]func(*sql.Selector), error) {
+func (ss Sorts) Predicate(node entx.Node) ([]func(*sql.Selector), error) {
 	lenSorts := len(ss)
 	if lenSorts == 0 {
 		return nil, nil
@@ -35,7 +37,7 @@ func (ss Sorts) Predicate(node Node) ([]func(*sql.Selector), error) {
 	return preds, nil
 }
 
-func (ss Sorts) ValidateAndPreprocess(cfg *SortConfig) error {
+func (ss Sorts) ValidateAndPreprocess(cfg *common.SortConfig) error {
 	for i := range ss {
 		if err := ss[i].ValidateAndPreprocess(cfg); err != nil {
 			return err
@@ -60,7 +62,7 @@ func (s *Sort) dirBuilder() (func(string) string, error) {
 	case DirASC, "":
 		return sql.Asc, nil
 	default:
-		return nil, &QueryBuildError{
+		return nil, &common.QueryBuildError{
 			Op:  "Sort.dirBuilder",
 			Err: fmt.Errorf("unsupported direction %q", s.Direction),
 		}
@@ -83,14 +85,14 @@ func (s *Sort) aggBuilder() (func(string) string, error) {
 	case AggCount:
 		return sql.Count, nil
 	default:
-		return nil, &QueryBuildError{
+		return nil, &common.QueryBuildError{
 			Op:  "Sort.dirBuilder",
 			Err: fmt.Errorf("unsupported aggregate %q", s.Aggregate),
 		}
 	}
 }
 
-func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
+func (s *Sort) Predicate(node entx.Node) (func(*sql.Selector), error) {
 	direction, err := s.dirBuilder()
 	if err != nil {
 		return nil, err
@@ -102,7 +104,7 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 
 	_, field, bridges, err := resolveChain(node, s.fieldParts)
 	if err != nil {
-		return nil, &QueryBuildError{
+		return nil, &common.QueryBuildError{
 			Op:  "Sort.Predicate",
 			Err: err,
 		}
@@ -112,7 +114,7 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 		if s.Aggregate == AggCount {
 			field = "*"
 		} else {
-			return nil, &QueryBuildError{
+			return nil, &common.QueryBuildError{
 				Op:  "Sort.Predicate",
 				Err: errors.New("field must be specified"),
 			}
@@ -122,7 +124,7 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 	hasAgg := s.Aggregate != ""
 	// cannot aggregate without relation
 	if hasAgg && len(bridges) == 0 {
-		return nil, &QueryBuildError{
+		return nil, &common.QueryBuildError{
 			Op:  "Sort.Predicate",
 			Err: fmt.Errorf("aggregate %q without relations", s.Aggregate),
 		}
@@ -133,7 +135,7 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 	if !hasAgg && len(bridges) > 0 {
 		for _, b := range bridges {
 			if b.RelInfos().RelType != sqlgraph.M2O {
-				return nil, &QueryBuildError{
+				return nil, &common.QueryBuildError{
 					Op:  "Sort.Predicate",
 					Err: fmt.Errorf("non-aggregate sort through %s not allowed", b.RelInfos().RelType),
 				}
@@ -187,11 +189,11 @@ func (s *Sort) Predicate(node Node) (func(*sql.Selector), error) {
 	}, nil
 }
 
-func (s *Sort) ValidateAndPreprocess(cfg *SortConfig) error {
+func (s *Sort) ValidateAndPreprocess(cfg *common.SortConfig) error {
 	switch s.Direction {
 	case DirASC, DirDESC, "":
 	default:
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "SortDirection",
 			Err:  fmt.Errorf("unsupported direction %q", s.Direction),
 		}
@@ -200,7 +202,7 @@ func (s *Sort) ValidateAndPreprocess(cfg *SortConfig) error {
 	switch s.Aggregate {
 	case AggAvg, AggSum, AggMin, AggMax, AggCount, "":
 	default:
-		return &ValidationError{
+		return &common.ValidationError{
 			Rule: "SortAggregate",
 			Err:  fmt.Errorf("unsupported aggregate %q", s.Aggregate),
 		}
@@ -209,14 +211,14 @@ func (s *Sort) ValidateAndPreprocess(cfg *SortConfig) error {
 	if s.Field != "" {
 		parts, pos, ok := splitChain(s.Field)
 		if !ok {
-			return &ValidationError{
+			return &common.ValidationError{
 				Rule: "InvalidSortFieldFormat",
 				Err:  fmt.Errorf("invalid empty field segment at character %d: %s", pos, s.Field),
 			}
 		}
 
 		if cfg.MaxSortRelationDepth > 0 && len(parts)-1 > cfg.MaxSortRelationDepth {
-			return &ValidationError{
+			return &common.ValidationError{
 				Rule: "MaxSortRelationsDepth",
 				Err:  fmt.Errorf("aggregate relation depth of %d exceeds max %d", len(parts)-1, cfg.MaxSortRelationDepth),
 			}

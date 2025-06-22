@@ -1,4 +1,4 @@
-package search
+package common
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/brice-74/entx"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -17,7 +18,7 @@ type ScalarQuery struct {
 	Dest     any           // destination pointer, destinations that implement the driver.Valuer are processed.
 }
 
-func ExecuteScalar(ctx context.Context, client Client, scalar *ScalarQuery) (any, error) {
+func ExecuteScalar(ctx context.Context, client entx.Client, scalar *ScalarQuery) (any, error) {
 	query, args := sql.SelectExpr(scalar.Selector).Query()
 	rows, err := client.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -49,7 +50,7 @@ func ExecuteScalar(ctx context.Context, client Client, scalar *ScalarQuery) (any
 //	  …
 //
 // and scans directly into Dest.
-func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery) (map[string]any, error) {
+func ExecuteScalars(ctx context.Context, client entx.Client, scalars ...*ScalarQuery) (map[string]any, error) {
 	if length := len(scalars); length <= 0 {
 		return nil, nil
 	} else if length == 1 {
@@ -99,7 +100,7 @@ func ExecuteScalars(ctx context.Context, client Client, scalars ...*ScalarQuery)
 func ExecuteScalarGroupsAsync(
 	ctx context.Context,
 	wg *errgroup.Group,
-	client Client,
+	client entx.Client,
 	cfg *Config,
 	responseSize int,
 	scalarGroups ...[]*ScalarQuery,
@@ -115,7 +116,7 @@ func ExecuteScalarGroupsAsync(
 		case 0:
 		case 1:
 			wg.Go(func() error {
-				ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+				ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 				defer cancel()
 				res, err := ExecuteScalar(ctx, client, group[0])
 				if err != nil {
@@ -128,7 +129,7 @@ func ExecuteScalarGroupsAsync(
 			})
 		default:
 			wg.Go(func() error {
-				ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+				ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 				defer cancel()
 				res, err := ExecuteScalars(ctx, client, group...)
 				if err != nil {
@@ -146,7 +147,7 @@ func ExecuteScalarGroupsAsync(
 
 func ExecuteScalarGroupsSync(
 	ctx context.Context,
-	client Client,
+	client entx.Client,
 	cfg *Config,
 	responseSize int,
 	scalarGroups ...[]*ScalarQuery,
@@ -160,7 +161,7 @@ func ExecuteScalarGroupsSync(
 		switch len(group) {
 		case 0:
 		case 1:
-			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 			defer cancel()
 
 			res, err := ExecuteScalar(ctx, client, group[0])
@@ -170,7 +171,7 @@ func ExecuteScalarGroupsSync(
 
 			finalRes[group[0].Key] = res
 		default:
-			ctx, cancel := contextTimeout(ctx, cfg.AggregateTimeout)
+			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
 			defer cancel()
 
 			res, err := ExecuteScalars(ctx, client, group...)

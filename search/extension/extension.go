@@ -15,16 +15,22 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO:
+// - Separate the responsibilities of code generation: the graph should be handled by an entx extension,
+//   while the module-specific logic for search should be managed here.
+// - Split Nodes and Bridges into separate files
+// - Write generated files into a temporary .entx directory, then apply them to the entx directory
+
 var (
 	//go:embed template/*.tmpl
 	_templatesFS embed.FS
 
 	funcs = template.FuncMap{
-		"searchImportPath": nil,
-		"searchImportName": nil,
-		"isNodeInclude":    nil,
-		"debug":            debug,
-		"isGenType":        isGenType,
+		"entxImportPath": nil,
+		"entxImportName": nil,
+		"isNodeInclude":  nil,
+		"debug":          debug,
+		"isGenType":      isGenType,
 	}
 )
 
@@ -38,8 +44,8 @@ func New(opts ...Option) *Extension {
 	ext := &Extension{conf: NewConfig(opts...)}
 	// must be captured dynamically to avoid empty computedNodes
 	funcs["isNodeInclude"] = func(n *gen.Type) bool { return ext.IsNodeInclude(n) }
-	funcs["searchImportPath"] = func() string { return ext.conf.importPath }
-	funcs["searchImportName"] = func() string { return ext.conf.importName }
+	funcs["entxImportPath"] = func() string { return ext.conf.importPath }
+	funcs["entxImportName"] = func() string { return ext.conf.importName }
 	return ext
 }
 

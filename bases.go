@@ -1,4 +1,4 @@
-package search
+package entx
 
 import (
 	"entgo.io/ent/dialect/sql"

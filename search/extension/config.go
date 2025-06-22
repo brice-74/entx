@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	searchableNodeAnnotKey  = "entx_searchable_node"
-	searchDefaultImportPath = "github.com/brice-74/entx/search"
+	searchableNodeAnnotKey = "entx_searchable_node"
+	entxImportPath         = "github.com/brice-74/entx"
 )
 
 type Annotation struct{ NodeConfig }
@@ -58,7 +58,7 @@ type Config struct {
 
 func NewConfig(opts ...Option) *Config {
 	cfg := &Config{
-		importPath:       searchDefaultImportPath,
+		importPath:       entxImportPath,
 		IncludeAllNodes:  true,
 		IncludeAllFields: true,
 		Nodes:            make(map[string]*NodeConfig),

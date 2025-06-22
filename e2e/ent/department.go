@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/brice-74/entx/search"
+	"github.com/brice-74/entx"
 )
 
 // Department is the model entity for the Department schema.
@@ -24,7 +24,7 @@ type Department struct {
 	Edges        DepartmentEdges `json:"edges"`
 	selectValues sql.SelectValues
 	// Meta is used by entx search to add metadata to the response.
-	Meta *search.EntityMeta `json:"meta,omitempty"`
+	Meta *entx.EntityMeta `json:"meta,omitempty"`
 }
 
 // DepartmentEdges holds the relations/edges for other nodes in the graph.
@@ -129,9 +129,9 @@ func (d *Department) String() string {
 }
 
 // Metadatas allow you to retrieve or edit metadatas
-func (e *Department) Metadatas() *search.EntityMeta {
+func (e *Department) Metadatas() *entx.EntityMeta {
 	if e.Meta == nil {
-		e.Meta = new(search.EntityMeta)
+		e.Meta = new(entx.EntityMeta)
 	}
 	return e.Meta
 }

@@ -3,1114 +3,1114 @@
 package entx
 
 import (
-   "fmt"
-	"reflect"
-   
-   "entgo.io/ent/dialect/sql/sqlgraph"
-   "entgo.io/ent/dialect/sql"
-   "github.com/brice-74/entx/search"
+  "fmt"
+  "reflect"
+  
+  "entgo.io/ent/dialect/sql/sqlgraph"
+  "entgo.io/ent/dialect/sql"
+  "github.com/brice-74/entx"
 
-   "e2e/ent"
-   "e2e/ent/article"
-   "e2e/ent/articletag"
-   "e2e/ent/comment"
-   "e2e/ent/department"
-   "e2e/ent/employee"
-   "e2e/ent/tag"
-   "e2e/ent/user"
+  "e2e/ent"
+  "e2e/ent/article"
+  "e2e/ent/articletag"
+  "e2e/ent/comment"
+  "e2e/ent/department"
+  "e2e/ent/employee"
+  "e2e/ent/tag"
+  "e2e/ent/user"
 )
 
 type ArticleNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newArticleNode() *ArticleNode {
-   cols := map[string]*search.Field{
-      "user_id": {Name:"user_id", StorageName:"user_id"},
-      "title": {Name:"title", StorageName:"title"},
-      "content": {Name:"content", StorageName:"content"},
-      "published": {Name:"published", StorageName:"published"},
-      "created_at": {Name:"created_at", StorageName:"created_at"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &ArticleNode{BaseNode: search.NewBaseNode(
-      "Article",
-		"articles",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "user_id": {Name:"user_id", StorageName:"user_id"},
+    "title": {Name:"title", StorageName:"title"},
+    "content": {Name:"content", StorageName:"content"},
+    "published": {Name:"published", StorageName:"published"},
+    "created_at": {Name:"created_at", StorageName:"created_at"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &ArticleNode{BaseNode: entx.NewBaseNode(
+    "Article",
+    "articles",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *ArticleNode) NewQuery(c search.Client) search.Query {
+func (n *ArticleNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *ArticleNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type ArticleTagNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newArticleTagNode() *ArticleTagNode {
-   cols := map[string]*search.Field{
-      "tag_id": {Name:"tag_id", StorageName:"tag_id"},
-      "article_id": {Name:"article_id", StorageName:"article_id"},
-   }
-   pks := []*search.Field{
-      cols["tag_id"],
-      cols["article_id"],
-   }
-	return &ArticleTagNode{BaseNode: search.NewBaseNode(
-      "ArticleTag",
-		"article_tags",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "tag_id": {Name:"tag_id", StorageName:"tag_id"},
+    "article_id": {Name:"article_id", StorageName:"article_id"},
+  }
+  pks := []*entx.Field{
+    cols["tag_id"],
+    cols["article_id"],
+  }
+	return &ArticleTagNode{BaseNode: entx.NewBaseNode(
+    "ArticleTag",
+    "article_tags",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *ArticleTagNode) NewQuery(c search.Client) search.Query {
+func (n *ArticleTagNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *ArticleTagNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type CommentNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newCommentNode() *CommentNode {
-   cols := map[string]*search.Field{
-      "body": {Name:"body", StorageName:"body"},
-      "created_at": {Name:"created_at", StorageName:"created_at"},
-      "user_id": {Name:"user_id", StorageName:"user_id"},
-      "article_id": {Name:"article_id", StorageName:"article_id"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &CommentNode{BaseNode: search.NewBaseNode(
-      "Comment",
-		"comments",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "body": {Name:"body", StorageName:"body"},
+    "created_at": {Name:"created_at", StorageName:"created_at"},
+    "user_id": {Name:"user_id", StorageName:"user_id"},
+    "article_id": {Name:"article_id", StorageName:"article_id"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &CommentNode{BaseNode: entx.NewBaseNode(
+    "Comment",
+    "comments",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *CommentNode) NewQuery(c search.Client) search.Query {
+func (n *CommentNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *CommentNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type DepartmentNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newDepartmentNode() *DepartmentNode {
-   cols := map[string]*search.Field{
-      "name": {Name:"name", StorageName:"name"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &DepartmentNode{BaseNode: search.NewBaseNode(
-      "Department",
-		"departments",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "name": {Name:"name", StorageName:"name"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &DepartmentNode{BaseNode: entx.NewBaseNode(
+    "Department",
+    "departments",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *DepartmentNode) NewQuery(c search.Client) search.Query {
+func (n *DepartmentNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *DepartmentNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type EmployeeNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newEmployeeNode() *EmployeeNode {
-   cols := map[string]*search.Field{
-      "hire_date": {Name:"hire_date", StorageName:"hire_date"},
-      "manager_id": {Name:"manager_id", StorageName:"manager_id"},
-      "user_id": {Name:"user_id", StorageName:"user_id"},
-      "department_id": {Name:"department_id", StorageName:"department_id"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &EmployeeNode{BaseNode: search.NewBaseNode(
-      "Employee",
-		"employees",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "hire_date": {Name:"hire_date", StorageName:"hire_date"},
+    "manager_id": {Name:"manager_id", StorageName:"manager_id"},
+    "user_id": {Name:"user_id", StorageName:"user_id"},
+    "department_id": {Name:"department_id", StorageName:"department_id"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &EmployeeNode{BaseNode: entx.NewBaseNode(
+    "Employee",
+    "employees",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *EmployeeNode) NewQuery(c search.Client) search.Query {
+func (n *EmployeeNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *EmployeeNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type TagNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newTagNode() *TagNode {
-   cols := map[string]*search.Field{
-      "name": {Name:"name", StorageName:"name"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &TagNode{BaseNode: search.NewBaseNode(
-      "Tag",
-		"tags",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "name": {Name:"name", StorageName:"name"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &TagNode{BaseNode: entx.NewBaseNode(
+    "Tag",
+    "tags",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *TagNode) NewQuery(c search.Client) search.Query {
+func (n *TagNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *TagNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 
 type UserNode struct {
-	search.BaseNode
+	entx.BaseNode
 }
 
 func newUserNode() *UserNode {
-   cols := map[string]*search.Field{
-      "name": {Name:"name", StorageName:"name"},
-      "email": {Name:"email", StorageName:"email"},
-      "age": {Name:"age", StorageName:"age"},
-      "is_active": {Name:"is_active", StorageName:"is_active"},
-      "created_at": {Name:"created_at", StorageName:"created_at"},
-      "updated_at": {Name:"updated_at", StorageName:"updated_at"},
-      "id": {Name:"id", StorageName:"id"},
-   }
-   pks := []*search.Field{
-      cols["id"],
-   }
-	return &UserNode{BaseNode: search.NewBaseNode(
-      "User",
-		"users",
-		make(map[string]search.Bridge),
+  cols := map[string]*entx.Field{
+    "name": {Name:"name", StorageName:"name"},
+    "email": {Name:"email", StorageName:"email"},
+    "age": {Name:"age", StorageName:"age"},
+    "is_active": {Name:"is_active", StorageName:"is_active"},
+    "created_at": {Name:"created_at", StorageName:"created_at"},
+    "updated_at": {Name:"updated_at", StorageName:"updated_at"},
+    "id": {Name:"id", StorageName:"id"},
+  }
+  pks := []*entx.Field{
+    cols["id"],
+  }
+	return &UserNode{BaseNode: entx.NewBaseNode(
+    "User",
+    "users",
+		make(map[string]entx.Bridge),
 		cols,
 		pks,
-   )}
+  )}
 }
 
-func (n *UserNode) NewQuery(c search.Client) search.Query {
+func (n *UserNode) NewQuery(c entx.Client) entx.Query {
 	return c.MustGetEntityClient(n).Query()
 }
 
 func (n *UserNode) Policy() ent.Policy {
-   return nil
+  return nil
 }
 // ArticleCommentsBridge (O2M) left=Article, right=Comment
 type ArticleCommentsBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleCommentsBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleCommentsBridge {
-   return &ArticleCommentsBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "article_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &ArticleCommentsBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "article_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*ArticleCommentsBridge) Filter() func(*sql.Selector) {
-   return article.HasComments()
+  return article.HasComments()
 }
 
 func (*ArticleCommentsBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return article.HasCommentsWith(search.CombinePredicates(predicates...))
+  return article.HasCommentsWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleCommentsBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleCommentsBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleCommentsBridge.Include expect *ArticleQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleQuery.WithComments(func(q *ent.CommentQuery) {
-		cq(&CommentQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Comment](handlers...))})
+		cq(&CommentQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Comment](handlers...))})
 	})
 	return adapter
 }
 // CommentArticleBridge (M2O) left=Comment, right=Article
 type CommentArticleBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newCommentArticleBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *CommentArticleBridge {
-   return &CommentArticleBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "article_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &CommentArticleBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "article_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*CommentArticleBridge) Filter() func(*sql.Selector) {
-   return comment.HasArticle()
+  return comment.HasArticle()
 }
 
 func (*CommentArticleBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return comment.HasArticleWith(search.CombinePredicates(predicates...))
+  return comment.HasArticleWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *CommentArticleBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *CommentArticleBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*CommentQuery)
 	if !ok {
 		panic(fmt.Sprintf("CommentArticleBridge.Include expect *CommentQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.CommentQuery.WithArticle(func(q *ent.ArticleQuery) {
-		cq(&ArticleQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Article](handlers...))})
+		cq(&ArticleQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Article](handlers...))})
 	})
 	return adapter
 }
 // ArticleArticleTagBridge (O2M) left=Article, right=ArticleTag
 type ArticleArticleTagBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleArticleTagBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleArticleTagBridge {
-   return &ArticleArticleTagBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "article_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &ArticleArticleTagBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "article_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*ArticleArticleTagBridge) Filter() func(*sql.Selector) {
-   return article.HasArticleTag()
+  return article.HasArticleTag()
 }
 
 func (*ArticleArticleTagBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return article.HasArticleTagWith(search.CombinePredicates(predicates...))
+  return article.HasArticleTagWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleArticleTagBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleArticleTagBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleArticleTagBridge.Include expect *ArticleQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleQuery.WithArticleTag(func(q *ent.ArticleTagQuery) {
-		cq(&ArticleTagQuery{q.AppendInterceptors(search.ToInterceptor[*ent.ArticleTag](handlers...))})
+		cq(&ArticleTagQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.ArticleTag](handlers...))})
 	})
 	return adapter
 }
 // ArticleTagArticleBridge (M2O) left=ArticleTag, right=Article
 type ArticleTagArticleBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleTagArticleBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleTagArticleBridge {
-   return &ArticleTagArticleBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "article_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &ArticleTagArticleBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "article_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*ArticleTagArticleBridge) Filter() func(*sql.Selector) {
-   return articletag.HasArticle()
+  return articletag.HasArticle()
 }
 
 func (*ArticleTagArticleBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return articletag.HasArticleWith(search.CombinePredicates(predicates...))
+  return articletag.HasArticleWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleTagArticleBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleTagArticleBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleTagQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleTagArticleBridge.Include expect *ArticleTagQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleTagQuery.WithArticle(func(q *ent.ArticleQuery) {
-		cq(&ArticleQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Article](handlers...))})
+		cq(&ArticleQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Article](handlers...))})
 	})
 	return adapter
 }
 // DepartmentEmployeesBridge (O2M) left=Department, right=Employee
 type DepartmentEmployeesBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newDepartmentEmployeesBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *DepartmentEmployeesBridge {
-   return &DepartmentEmployeesBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "department_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &DepartmentEmployeesBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "department_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*DepartmentEmployeesBridge) Filter() func(*sql.Selector) {
-   return department.HasEmployees()
+  return department.HasEmployees()
 }
 
 func (*DepartmentEmployeesBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return department.HasEmployeesWith(search.CombinePredicates(predicates...))
+  return department.HasEmployeesWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *DepartmentEmployeesBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *DepartmentEmployeesBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*DepartmentQuery)
 	if !ok {
 		panic(fmt.Sprintf("DepartmentEmployeesBridge.Include expect *DepartmentQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.DepartmentQuery.WithEmployees(func(q *ent.EmployeeQuery) {
-		cq(&EmployeeQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Employee](handlers...))})
+		cq(&EmployeeQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Employee](handlers...))})
 	})
 	return adapter
 }
 // EmployeeDepartmentBridge (M2O) left=Employee, right=Department
 type EmployeeDepartmentBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newEmployeeDepartmentBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *EmployeeDepartmentBridge {
-   return &EmployeeDepartmentBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "department_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &EmployeeDepartmentBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "department_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*EmployeeDepartmentBridge) Filter() func(*sql.Selector) {
-   return employee.HasDepartment()
+  return employee.HasDepartment()
 }
 
 func (*EmployeeDepartmentBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return employee.HasDepartmentWith(search.CombinePredicates(predicates...))
+  return employee.HasDepartmentWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *EmployeeDepartmentBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *EmployeeDepartmentBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*EmployeeQuery)
 	if !ok {
 		panic(fmt.Sprintf("EmployeeDepartmentBridge.Include expect *EmployeeQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.EmployeeQuery.WithDepartment(func(q *ent.DepartmentQuery) {
-		cq(&DepartmentQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Department](handlers...))})
+		cq(&DepartmentQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Department](handlers...))})
 	})
 	return adapter
 }
 // EmployeeManagerBridge (M2O) left=Employee, right=Employee
 type EmployeeManagerBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newEmployeeManagerBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *EmployeeManagerBridge {
-   return &EmployeeManagerBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "id",
-            FinalRightField: "manager_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &EmployeeManagerBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "id",
+        FinalRightField: "manager_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*EmployeeManagerBridge) Filter() func(*sql.Selector) {
-   return employee.HasManager()
+  return employee.HasManager()
 }
 
 func (*EmployeeManagerBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return employee.HasManagerWith(search.CombinePredicates(predicates...))
+  return employee.HasManagerWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *EmployeeManagerBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *EmployeeManagerBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*EmployeeQuery)
 	if !ok {
 		panic(fmt.Sprintf("EmployeeManagerBridge.Include expect *EmployeeQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.EmployeeQuery.WithManager(func(q *ent.EmployeeQuery) {
-		cq(&EmployeeQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Employee](handlers...))})
+		cq(&EmployeeQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Employee](handlers...))})
 	})
 	return adapter
 }
 // EmployeeReportsBridge (O2M) left=Employee, right=Employee
 type EmployeeReportsBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newEmployeeReportsBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *EmployeeReportsBridge {
-   return &EmployeeReportsBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "manager_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &EmployeeReportsBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "manager_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*EmployeeReportsBridge) Filter() func(*sql.Selector) {
-   return employee.HasReports()
+  return employee.HasReports()
 }
 
 func (*EmployeeReportsBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return employee.HasReportsWith(search.CombinePredicates(predicates...))
+  return employee.HasReportsWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *EmployeeReportsBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *EmployeeReportsBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*EmployeeQuery)
 	if !ok {
 		panic(fmt.Sprintf("EmployeeReportsBridge.Include expect *EmployeeQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.EmployeeQuery.WithReports(func(q *ent.EmployeeQuery) {
-		cq(&EmployeeQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Employee](handlers...))})
+		cq(&EmployeeQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Employee](handlers...))})
 	})
 	return adapter
 }
 // TagArticlesBridge (M2M) left=Tag, right=Article
 type TagArticlesBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newTagArticlesBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *TagArticlesBridge {
-   return &TagArticlesBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2M,
-            FinalLeftField:  "id",
-            FinalRightField: "id",
-            PivotTable:      "article_tags",
-            PivotLeftField:  "tag_id",
-            PivotRightField: "article_id",
-         },
-      ),
-   }
+  return &TagArticlesBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2M,
+        FinalLeftField:  "id",
+        FinalRightField: "id",
+        PivotTable:      "article_tags",
+        PivotLeftField:  "tag_id",
+        PivotRightField: "article_id",
+      },
+    ),
+  }
 }
 
 func (*TagArticlesBridge) Filter() func(*sql.Selector) {
-   return tag.HasArticles()
+  return tag.HasArticles()
 }
 
 func (*TagArticlesBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return tag.HasArticlesWith(search.CombinePredicates(predicates...))
+  return tag.HasArticlesWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *TagArticlesBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *TagArticlesBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*TagQuery)
 	if !ok {
 		panic(fmt.Sprintf("TagArticlesBridge.Include expect *TagQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.TagQuery.WithArticles(func(q *ent.ArticleQuery) {
-		cq(&ArticleQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Article](handlers...))})
+		cq(&ArticleQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Article](handlers...))})
 	})
 	return adapter
 }
 // ArticleTagsBridge (M2M) left=Article, right=Tag
 type ArticleTagsBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleTagsBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleTagsBridge {
-   return &ArticleTagsBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2M,
-            FinalLeftField:  "id",
-            FinalRightField: "id",
-            PivotTable:      "article_tags",
-            PivotLeftField:  "article_id",
-            PivotRightField: "tag_id",
-         },
-      ),
-   }
+  return &ArticleTagsBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2M,
+        FinalLeftField:  "id",
+        FinalRightField: "id",
+        PivotTable:      "article_tags",
+        PivotLeftField:  "article_id",
+        PivotRightField: "tag_id",
+      },
+    ),
+  }
 }
 
 func (*ArticleTagsBridge) Filter() func(*sql.Selector) {
-   return article.HasTags()
+  return article.HasTags()
 }
 
 func (*ArticleTagsBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return article.HasTagsWith(search.CombinePredicates(predicates...))
+  return article.HasTagsWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleTagsBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleTagsBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleTagsBridge.Include expect *ArticleQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleQuery.WithTags(func(q *ent.TagQuery) {
-		cq(&TagQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Tag](handlers...))})
+		cq(&TagQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Tag](handlers...))})
 	})
 	return adapter
 }
 // TagArticleTagBridge (O2M) left=Tag, right=ArticleTag
 type TagArticleTagBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newTagArticleTagBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *TagArticleTagBridge {
-   return &TagArticleTagBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "tag_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &TagArticleTagBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "tag_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*TagArticleTagBridge) Filter() func(*sql.Selector) {
-   return tag.HasArticleTag()
+  return tag.HasArticleTag()
 }
 
 func (*TagArticleTagBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return tag.HasArticleTagWith(search.CombinePredicates(predicates...))
+  return tag.HasArticleTagWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *TagArticleTagBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *TagArticleTagBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*TagQuery)
 	if !ok {
 		panic(fmt.Sprintf("TagArticleTagBridge.Include expect *TagQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.TagQuery.WithArticleTag(func(q *ent.ArticleTagQuery) {
-		cq(&ArticleTagQuery{q.AppendInterceptors(search.ToInterceptor[*ent.ArticleTag](handlers...))})
+		cq(&ArticleTagQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.ArticleTag](handlers...))})
 	})
 	return adapter
 }
 // ArticleTagTagBridge (M2O) left=ArticleTag, right=Tag
 type ArticleTagTagBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleTagTagBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleTagTagBridge {
-   return &ArticleTagTagBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "tag_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &ArticleTagTagBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "tag_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*ArticleTagTagBridge) Filter() func(*sql.Selector) {
-   return articletag.HasTag()
+  return articletag.HasTag()
 }
 
 func (*ArticleTagTagBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return articletag.HasTagWith(search.CombinePredicates(predicates...))
+  return articletag.HasTagWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleTagTagBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleTagTagBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleTagQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleTagTagBridge.Include expect *ArticleTagQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleTagQuery.WithTag(func(q *ent.TagQuery) {
-		cq(&TagQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Tag](handlers...))})
+		cq(&TagQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Tag](handlers...))})
 	})
 	return adapter
 }
 // UserArticlesBridge (O2M) left=User, right=Article
 type UserArticlesBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newUserArticlesBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *UserArticlesBridge {
-   return &UserArticlesBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "user_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &UserArticlesBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "user_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*UserArticlesBridge) Filter() func(*sql.Selector) {
-   return user.HasArticles()
+  return user.HasArticles()
 }
 
 func (*UserArticlesBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return user.HasArticlesWith(search.CombinePredicates(predicates...))
+  return user.HasArticlesWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *UserArticlesBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *UserArticlesBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*UserQuery)
 	if !ok {
 		panic(fmt.Sprintf("UserArticlesBridge.Include expect *UserQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.UserQuery.WithArticles(func(q *ent.ArticleQuery) {
-		cq(&ArticleQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Article](handlers...))})
+		cq(&ArticleQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Article](handlers...))})
 	})
 	return adapter
 }
 // ArticleAuthorBridge (M2O) left=Article, right=User
 type ArticleAuthorBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newArticleAuthorBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *ArticleAuthorBridge {
-   return &ArticleAuthorBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "user_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &ArticleAuthorBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "user_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*ArticleAuthorBridge) Filter() func(*sql.Selector) {
-   return article.HasAuthor()
+  return article.HasAuthor()
 }
 
 func (*ArticleAuthorBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return article.HasAuthorWith(search.CombinePredicates(predicates...))
+  return article.HasAuthorWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *ArticleAuthorBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *ArticleAuthorBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*ArticleQuery)
 	if !ok {
 		panic(fmt.Sprintf("ArticleAuthorBridge.Include expect *ArticleQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.ArticleQuery.WithAuthor(func(q *ent.UserQuery) {
-		cq(&UserQuery{q.AppendInterceptors(search.ToInterceptor[*ent.User](handlers...))})
+		cq(&UserQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.User](handlers...))})
 	})
 	return adapter
 }
 // UserCommentsBridge (O2M) left=User, right=Comment
 type UserCommentsBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newUserCommentsBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *UserCommentsBridge {
-   return &UserCommentsBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2M,
-            FinalLeftField:  "id",
-            FinalRightField: "user_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &UserCommentsBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2M,
+        FinalLeftField:  "id",
+        FinalRightField: "user_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*UserCommentsBridge) Filter() func(*sql.Selector) {
-   return user.HasComments()
+  return user.HasComments()
 }
 
 func (*UserCommentsBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return user.HasCommentsWith(search.CombinePredicates(predicates...))
+  return user.HasCommentsWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *UserCommentsBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *UserCommentsBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*UserQuery)
 	if !ok {
 		panic(fmt.Sprintf("UserCommentsBridge.Include expect *UserQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.UserQuery.WithComments(func(q *ent.CommentQuery) {
-		cq(&CommentQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Comment](handlers...))})
+		cq(&CommentQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Comment](handlers...))})
 	})
 	return adapter
 }
 // CommentUserBridge (M2O) left=Comment, right=User
 type CommentUserBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newCommentUserBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *CommentUserBridge {
-   return &CommentUserBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.M2O,
-            FinalLeftField:  "user_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &CommentUserBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.M2O,
+        FinalLeftField:  "user_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*CommentUserBridge) Filter() func(*sql.Selector) {
-   return comment.HasUser()
+  return comment.HasUser()
 }
 
 func (*CommentUserBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return comment.HasUserWith(search.CombinePredicates(predicates...))
+  return comment.HasUserWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *CommentUserBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *CommentUserBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*CommentQuery)
 	if !ok {
 		panic(fmt.Sprintf("CommentUserBridge.Include expect *CommentQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.CommentQuery.WithUser(func(q *ent.UserQuery) {
-		cq(&UserQuery{q.AppendInterceptors(search.ToInterceptor[*ent.User](handlers...))})
+		cq(&UserQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.User](handlers...))})
 	})
 	return adapter
 }
 // UserEmployeeBridge (O2O) left=User, right=Employee
 type UserEmployeeBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newUserEmployeeBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *UserEmployeeBridge {
-   return &UserEmployeeBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2O,
-            FinalLeftField:  "id",
-            FinalRightField: "user_id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &UserEmployeeBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2O,
+        FinalLeftField:  "id",
+        FinalRightField: "user_id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*UserEmployeeBridge) Filter() func(*sql.Selector) {
-   return user.HasEmployee()
+  return user.HasEmployee()
 }
 
 func (*UserEmployeeBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return user.HasEmployeeWith(search.CombinePredicates(predicates...))
+  return user.HasEmployeeWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *UserEmployeeBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *UserEmployeeBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*UserQuery)
 	if !ok {
 		panic(fmt.Sprintf("UserEmployeeBridge.Include expect *UserQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.UserQuery.WithEmployee(func(q *ent.EmployeeQuery) {
-		cq(&EmployeeQuery{q.AppendInterceptors(search.ToInterceptor[*ent.Employee](handlers...))})
+		cq(&EmployeeQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.Employee](handlers...))})
 	})
 	return adapter
 }
 // EmployeeUserBridge (O2O) left=Employee, right=User
 type EmployeeUserBridge struct {
-   search.BaseBridge
+  entx.BaseBridge
 }
 
 func newEmployeeUserBridge(
-   left search.Node, right search.Node,
+  left entx.Node, right entx.Node,
 ) *EmployeeUserBridge {
-   return &EmployeeUserBridge{
-      BaseBridge: search.NewBaseBridge(
-         left,
-         right,
-         nil,
-         search.RelationInfos{
-            RelType:         sqlgraph.O2O,
-            FinalLeftField:  "user_id",
-            FinalRightField: "id",
-            PivotTable:      "",
-            PivotLeftField:  "",
-            PivotRightField: "",
-         },
-      ),
-   }
+  return &EmployeeUserBridge{
+    BaseBridge: entx.NewBaseBridge(
+      left,
+      right,
+      nil,
+      entx.RelationInfos{
+        RelType:         sqlgraph.O2O,
+        FinalLeftField:  "user_id",
+        FinalRightField: "id",
+        PivotTable:      "",
+        PivotLeftField:  "",
+        PivotRightField: "",
+      },
+    ),
+  }
 }
 
 func (*EmployeeUserBridge) Filter() func(*sql.Selector) {
-   return employee.HasUser()
+  return employee.HasUser()
 }
 
 func (*EmployeeUserBridge) FilterWith(predicates ...func(*sql.Selector)) func(*sql.Selector) {
-   return employee.HasUserWith(search.CombinePredicates(predicates...))
+  return employee.HasUserWith(entx.CombinePredicates(predicates...))
 }
 
-func (b *EmployeeUserBridge) Include(pq search.Query, cq func(search.Query), handlers ...search.EntityHandler) search.Query {
+func (b *EmployeeUserBridge) Include(pq entx.Query, cq func(entx.Query), handlers ...entx.EntityHandler) entx.Query {
 	adapter, ok := pq.(*EmployeeQuery)
 	if !ok {
 		panic(fmt.Sprintf("EmployeeUserBridge.Include expect *EmployeeQuery as Query, got: %s", reflect.TypeOf(pq)))
 	}
 
 	adapter.EmployeeQuery.WithUser(func(q *ent.UserQuery) {
-		cq(&UserQuery{q.AppendInterceptors(search.ToInterceptor[*ent.User](handlers...))})
+		cq(&UserQuery{q.AppendInterceptors(entx.ToInterceptor[*ent.User](handlers...))})
 	})
 	return adapter
 }
 
 var Graph = BuildGraph()
 
-func BuildGraph() map[string]search.Node {
-   var articleNode = newArticleNode()
-   var articleTagNode = newArticleTagNode()
-   var commentNode = newCommentNode()
-   var departmentNode = newDepartmentNode()
-   var employeeNode = newEmployeeNode()
-   var tagNode = newTagNode()
-   var userNode = newUserNode()
-   
-   var articleCommentsBridge = newArticleCommentsBridge(articleNode, commentNode)
-   articleNode.SetBridge("comments", articleCommentsBridge)
-   var commentArticleBridge = newCommentArticleBridge(commentNode, articleNode)
-   commentNode.SetBridge("article", commentArticleBridge)
-   articleCommentsBridge.SetInverse(commentArticleBridge)
-   commentArticleBridge.SetInverse(articleCommentsBridge)
-   
-   var articleArticleTagBridge = newArticleArticleTagBridge(articleNode, articleTagNode)
-   articleNode.SetBridge("article_tag", articleArticleTagBridge)
-   var articleTagArticleBridge = newArticleTagArticleBridge(articleTagNode, articleNode)
-   articleTagNode.SetBridge("article", articleTagArticleBridge)
-   articleArticleTagBridge.SetInverse(articleTagArticleBridge)
-   articleTagArticleBridge.SetInverse(articleArticleTagBridge)
-   
-   var departmentEmployeesBridge = newDepartmentEmployeesBridge(departmentNode, employeeNode)
-   departmentNode.SetBridge("employees", departmentEmployeesBridge)
-   var employeeDepartmentBridge = newEmployeeDepartmentBridge(employeeNode, departmentNode)
-   employeeNode.SetBridge("department", employeeDepartmentBridge)
-   departmentEmployeesBridge.SetInverse(employeeDepartmentBridge)
-   employeeDepartmentBridge.SetInverse(departmentEmployeesBridge)
-   
-   var employeeManagerBridge = newEmployeeManagerBridge(employeeNode, employeeNode)
-   employeeNode.SetBridge("manager", employeeManagerBridge)
-   
-   var employeeReportsBridge = newEmployeeReportsBridge(employeeNode, employeeNode)
-   employeeNode.SetBridge("reports", employeeReportsBridge)
-   
-   var tagArticlesBridge = newTagArticlesBridge(tagNode, articleNode)
-   tagNode.SetBridge("articles", tagArticlesBridge)
-   var articleTagsBridge = newArticleTagsBridge(articleNode, tagNode)
-   articleNode.SetBridge("tags", articleTagsBridge)
-   tagArticlesBridge.SetInverse(articleTagsBridge)
-   articleTagsBridge.SetInverse(tagArticlesBridge)
-   
-   var tagArticleTagBridge = newTagArticleTagBridge(tagNode, articleTagNode)
-   tagNode.SetBridge("article_tag", tagArticleTagBridge)
-   var articleTagTagBridge = newArticleTagTagBridge(articleTagNode, tagNode)
-   articleTagNode.SetBridge("tag", articleTagTagBridge)
-   tagArticleTagBridge.SetInverse(articleTagTagBridge)
-   articleTagTagBridge.SetInverse(tagArticleTagBridge)
-   
-   var userArticlesBridge = newUserArticlesBridge(userNode, articleNode)
-   userNode.SetBridge("articles", userArticlesBridge)
-   var articleAuthorBridge = newArticleAuthorBridge(articleNode, userNode)
-   articleNode.SetBridge("author", articleAuthorBridge)
-   userArticlesBridge.SetInverse(articleAuthorBridge)
-   articleAuthorBridge.SetInverse(userArticlesBridge)
-   
-   var userCommentsBridge = newUserCommentsBridge(userNode, commentNode)
-   userNode.SetBridge("comments", userCommentsBridge)
-   var commentUserBridge = newCommentUserBridge(commentNode, userNode)
-   commentNode.SetBridge("user", commentUserBridge)
-   userCommentsBridge.SetInverse(commentUserBridge)
-   commentUserBridge.SetInverse(userCommentsBridge)
-   
-   var userEmployeeBridge = newUserEmployeeBridge(userNode, employeeNode)
-   userNode.SetBridge("employee", userEmployeeBridge)
-   var employeeUserBridge = newEmployeeUserBridge(employeeNode, userNode)
-   employeeNode.SetBridge("user", employeeUserBridge)
-   userEmployeeBridge.SetInverse(employeeUserBridge)
-   employeeUserBridge.SetInverse(userEmployeeBridge)
-   
-   return map[string]search.Node{
-      "Article": articleNode,
-      "ArticleTag": articleTagNode,
-      "Comment": commentNode,
-      "Department": departmentNode,
-      "Employee": employeeNode,
-      "Tag": tagNode,
-      "User": userNode,
-   }
+func BuildGraph() map[string]entx.Node {
+  var articleNode = newArticleNode()
+  var articleTagNode = newArticleTagNode()
+  var commentNode = newCommentNode()
+  var departmentNode = newDepartmentNode()
+  var employeeNode = newEmployeeNode()
+  var tagNode = newTagNode()
+  var userNode = newUserNode()
+  
+  var articleCommentsBridge = newArticleCommentsBridge(articleNode, commentNode)
+  articleNode.SetBridge("comments", articleCommentsBridge)
+  var commentArticleBridge = newCommentArticleBridge(commentNode, articleNode)
+  commentNode.SetBridge("article", commentArticleBridge)
+  articleCommentsBridge.SetInverse(commentArticleBridge)
+  commentArticleBridge.SetInverse(articleCommentsBridge)
+  
+  var articleArticleTagBridge = newArticleArticleTagBridge(articleNode, articleTagNode)
+  articleNode.SetBridge("article_tag", articleArticleTagBridge)
+  var articleTagArticleBridge = newArticleTagArticleBridge(articleTagNode, articleNode)
+  articleTagNode.SetBridge("article", articleTagArticleBridge)
+  articleArticleTagBridge.SetInverse(articleTagArticleBridge)
+  articleTagArticleBridge.SetInverse(articleArticleTagBridge)
+  
+  var departmentEmployeesBridge = newDepartmentEmployeesBridge(departmentNode, employeeNode)
+  departmentNode.SetBridge("employees", departmentEmployeesBridge)
+  var employeeDepartmentBridge = newEmployeeDepartmentBridge(employeeNode, departmentNode)
+  employeeNode.SetBridge("department", employeeDepartmentBridge)
+  departmentEmployeesBridge.SetInverse(employeeDepartmentBridge)
+  employeeDepartmentBridge.SetInverse(departmentEmployeesBridge)
+  
+  var employeeManagerBridge = newEmployeeManagerBridge(employeeNode, employeeNode)
+  employeeNode.SetBridge("manager", employeeManagerBridge)
+  
+  var employeeReportsBridge = newEmployeeReportsBridge(employeeNode, employeeNode)
+  employeeNode.SetBridge("reports", employeeReportsBridge)
+  
+  var tagArticlesBridge = newTagArticlesBridge(tagNode, articleNode)
+  tagNode.SetBridge("articles", tagArticlesBridge)
+  var articleTagsBridge = newArticleTagsBridge(articleNode, tagNode)
+  articleNode.SetBridge("tags", articleTagsBridge)
+  tagArticlesBridge.SetInverse(articleTagsBridge)
+  articleTagsBridge.SetInverse(tagArticlesBridge)
+  
+  var tagArticleTagBridge = newTagArticleTagBridge(tagNode, articleTagNode)
+  tagNode.SetBridge("article_tag", tagArticleTagBridge)
+  var articleTagTagBridge = newArticleTagTagBridge(articleTagNode, tagNode)
+  articleTagNode.SetBridge("tag", articleTagTagBridge)
+  tagArticleTagBridge.SetInverse(articleTagTagBridge)
+  articleTagTagBridge.SetInverse(tagArticleTagBridge)
+  
+  var userArticlesBridge = newUserArticlesBridge(userNode, articleNode)
+  userNode.SetBridge("articles", userArticlesBridge)
+  var articleAuthorBridge = newArticleAuthorBridge(articleNode, userNode)
+  articleNode.SetBridge("author", articleAuthorBridge)
+  userArticlesBridge.SetInverse(articleAuthorBridge)
+  articleAuthorBridge.SetInverse(userArticlesBridge)
+  
+  var userCommentsBridge = newUserCommentsBridge(userNode, commentNode)
+  userNode.SetBridge("comments", userCommentsBridge)
+  var commentUserBridge = newCommentUserBridge(commentNode, userNode)
+  commentNode.SetBridge("user", commentUserBridge)
+  userCommentsBridge.SetInverse(commentUserBridge)
+  commentUserBridge.SetInverse(userCommentsBridge)
+  
+  var userEmployeeBridge = newUserEmployeeBridge(userNode, employeeNode)
+  userNode.SetBridge("employee", userEmployeeBridge)
+  var employeeUserBridge = newEmployeeUserBridge(employeeNode, userNode)
+  employeeNode.SetBridge("user", employeeUserBridge)
+  userEmployeeBridge.SetInverse(employeeUserBridge)
+  employeeUserBridge.SetInverse(userEmployeeBridge)
+  
+  return map[string]entx.Node{
+    "Article": articleNode,
+    "ArticleTag": articleTagNode,
+    "Comment": commentNode,
+    "Department": departmentNode,
+    "Employee": employeeNode,
+    "Tag": tagNode,
+    "User": userNode,
+  }
 }
