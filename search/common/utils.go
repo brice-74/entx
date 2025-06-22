@@ -94,7 +94,7 @@ func CheckMaxAggregates(cfg *Config, count int) (err error) {
 	return
 }
 
-func AttachPagination(
+func AttachPaginationAndClean(
 	res *GroupResponse,
 	pagMap map[string]*PaginateInfos,
 ) error {
@@ -102,27 +102,83 @@ func AttachPagination(
 		raw, ok := res.Meta.Aggregates[key]
 		if !ok {
 			return &ExecError{
-				Op:  "attachPagination",
+				Op:  "AttachPagination",
 				Err: fmt.Errorf("missing paginate count for '%s'", key),
 			}
 		}
 		cnt, ok := raw.(int64)
 		if !ok {
 			return &ExecError{
-				Op:  "attachPagination",
+				Op:  "AttachPagination",
 				Err: fmt.Errorf("paginate count wrong type for '%s': %T", key, raw),
 			}
-
 		}
 		sr, exist := res.Searches[key]
 		if !exist {
 			return &ExecError{
-				Op:  "attachPagination",
+				Op:  "AttachPagination",
 				Err: fmt.Errorf("search response not found for paginate on key '%s'", key),
 			}
 		}
+
 		sr.Meta.Paginate = p.Calculate(int(cnt), sr.Meta.Count)
 		delete(res.Meta.Aggregates, key)
 	}
 	return nil
+}
+
+func AttachPaginationAndCleanSync(
+	res *GroupResponseSync,
+	pagMap map[string]*PaginateInfos,
+) error {
+	keysToDelete, err := AttachPaginationSync(res, pagMap)
+	if err != nil {
+		return err
+	}
+
+	res.Aggregates.DeleteBatch(keysToDelete...)
+	return nil
+}
+
+func AttachPaginationSync(
+	res *GroupResponseSync,
+	pagMap map[string]*PaginateInfos,
+) ([]string, error) {
+	// Lock both maps for concurrent read
+	res.Aggregates.RLock()
+	defer res.Searches.RUnlock()
+	res.Searches.RLock()
+	defer res.Aggregates.RUnlock()
+
+	processedKeys := make([]string, len(pagMap))
+	var index int
+	for key, p := range pagMap {
+		raw, ok := res.Aggregates.UnsafeGet(key)
+		if !ok {
+			return nil, &ExecError{
+				Op:  "AttachPaginationSync",
+				Err: fmt.Errorf("missing paginate count for '%s'", key),
+			}
+		}
+		cnt, ok := raw.(int64)
+		if !ok {
+			return nil, &ExecError{
+				Op:  "AttachPaginationSync",
+				Err: fmt.Errorf("paginate count wrong type for '%s': %T", key, raw),
+			}
+		}
+		sr, exist := res.Searches.UnsafeGet(key)
+		if !exist {
+			return nil, &ExecError{
+				Op:  "AttachPaginationSync",
+				Err: fmt.Errorf("search response not found for paginate on key '%s'", key),
+			}
+		}
+		sr.Meta.Paginate = p.Calculate(int(cnt), sr.Meta.Count)
+
+		processedKeys[index] = key
+		index++
+	}
+
+	return processedKeys, nil
 }
