@@ -146,9 +146,9 @@ func AttachPaginationSync(
 ) ([]string, error) {
 	// Lock both maps for concurrent read
 	res.Aggregates.RLock()
-	defer res.Searches.RUnlock()
-	res.Searches.RLock()
 	defer res.Aggregates.RUnlock()
+	res.Searches.RLock()
+	defer res.Searches.RUnlock()
 
 	processedKeys := make([]string, len(pagMap))
 	var index int
