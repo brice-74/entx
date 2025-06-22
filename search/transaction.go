@@ -9,6 +9,7 @@ import (
 
 	"github.com/brice-74/entx"
 	"github.com/brice-74/entx/search/common"
+	"golang.org/x/sync/errgroup"
 )
 
 func WithTx[T any](
@@ -43,6 +44,38 @@ func rollback(tx entx.Transaction, err error) error {
 		err = fmt.Errorf("%w: rolling back transaction: %v", err, rerr)
 	}
 	return err
+}
+
+type TxQueryGroupBuilds []*TxQueryGroupBuild
+
+func (builds TxQueryGroupBuilds) execute(
+	ctx context.Context,
+	client entx.Client,
+	cfg *Config,
+	wg *errgroup.Group,
+	response *GroupResponseSync,
+) {
+	if len(builds) == 0 {
+		return
+	}
+
+	for _, build := range builds {
+		wg.Go(func() error {
+			res, err := build.Execute(ctx, client, cfg)
+			if err != nil {
+				return err
+			}
+			response.Searches.Lock()
+			defer response.Searches.Unlock()
+			maps.Copy(response.Searches.UnsafeRaw(), res.Searches)
+			if res.Meta != nil {
+				response.Aggregates.Lock()
+				defer response.Aggregates.Unlock()
+				maps.Copy(response.Aggregates.UnsafeRaw(), res.Meta.Aggregates)
+			}
+			return nil
+		})
+	}
 }
 
 type TxQueryGroupBuild struct {
@@ -223,7 +256,8 @@ func (groups TxQueryGroups) Execute(
 	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
-	if err := groups.ValidateAndPreprocessFinal(cfg); err != nil {
+	countSearches, countAggregates, err := groups.ValidateAndPreprocessFinal(cfg)
+	if err != nil {
 		return nil, err
 	}
 
@@ -232,56 +266,24 @@ func (groups TxQueryGroups) Execute(
 		return nil, err
 	}
 
-	return groups.execute(ctx, client, cfg, builds)
+	res := &GroupResponseSync{
+		Searches:   *common.NewMapSync(make(map[string]*SearchResponse, countSearches)),
+		Aggregates: *common.NewMapSync(make(map[string]any, countAggregates)),
+	}
+
+	wg, wgctx := errgroup.WithContext(ctx)
+	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
+
+	builds.execute(wgctx, client, cfg, wg, res)
+	if err := wg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return res.UnsafeResponse(), nil
 }
 
-func (groups TxQueryGroups) execute(
-	ctx context.Context,
-	client entx.Client,
-	cfg *Config,
-	builds []*TxQueryGroupBuild,
-) (*GroupResponse, error) {
-	// switch 1
-	// switch mutex
-	var totalSearches, totalAggs int
-	responses := make([]*GroupResponse, len(builds))
-	for i, build := range builds {
-		i = i
-		wg.Go(func() error {
-			res, err := build.Execute(ctx, client, cfg)
-			if err != nil {
-				return err
-			}
-			responses[i] = res
-			totalSearches += len(res.Searches)
-			if res.Meta != nil {
-				totalAggs += len(res.Meta.Aggregates)
-			}
-			return nil
-		})
-	}
-
-	final := &GroupResponse{}
-	if totalSearches > 0 {
-		final.Searches = make(SearchesResponse, totalSearches)
-	}
-	if totalAggs > 0 {
-		final.Meta = &MetaResponse{
-			Aggregates: make(AggregatesResponse, totalAggs),
-		}
-	}
-
-	for _, res := range responses {
-		maps.Copy(final.Searches, res.Searches)
-		if res.Meta != nil {
-			maps.Copy(final.Meta.Aggregates, res.Meta.Aggregates)
-		}
-	}
-	return final, nil
-}
-
-func (groups TxQueryGroups) Build(cfg *Config, graph entx.Graph) ([]*TxQueryGroupBuild, error) {
-	var builds = make([]*TxQueryGroupBuild, 0, len(groups))
+func (groups TxQueryGroups) Build(cfg *Config, graph entx.Graph) (TxQueryGroupBuilds, error) {
+	var builds = make(TxQueryGroupBuilds, 0, len(groups))
 	for i, group := range groups {
 		build, err := group.Build(cfg, graph)
 		if err != nil {
@@ -292,8 +294,7 @@ func (groups TxQueryGroups) Build(cfg *Config, graph entx.Graph) ([]*TxQueryGrou
 	return builds, nil
 }
 
-func (groups TxQueryGroups) ValidateAndPreprocessFinal(cfg *Config) (err error) {
-	var countSearches, countAggregates int
+func (groups TxQueryGroups) ValidateAndPreprocessFinal(cfg *Config) (countSearches, countAggregates int, err error) {
 	if countSearches, countAggregates, err = groups.ValidateAndPreprocess(cfg); err != nil {
 		return
 	}
