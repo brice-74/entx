@@ -3,10 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 var noopFn = func() {}
@@ -40,40 +37,6 @@ func SplitInChunks[SliceT SliceAlias[ElemT], ElemT any](input SliceT, batchSize 
 	return chunks
 }
 
-func GoExecBatch[T any](
-	ctx context.Context,
-	wg *errgroup.Group,
-	timeout time.Duration,
-	funcs []func(context.Context) (T, error),
-) []T {
-	results := make([]T, len(funcs))
-	var mu sync.Mutex
-
-	for i := range funcs {
-		if ctx.Err() != nil {
-			break
-		}
-
-		i := i
-		wg.Go(func() error {
-			ctx, cancel := ContextTimeout(ctx, timeout)
-			defer cancel()
-
-			res, err := funcs[i](ctx)
-			if err != nil {
-				return err
-			}
-
-			mu.Lock()
-			results[i] = res
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	return results
-}
-
 func CheckMaxSearches(cfg *Config, count int) (err error) {
 	if cfg.MaxSearchesPerRequest != 0 && count > cfg.MaxSearchesPerRequest {
 		err = &ValidationError{
@@ -92,12 +55,4 @@ func CheckMaxAggregates(cfg *Config, count int) (err error) {
 		}
 	}
 	return
-}
-
-func MergeSlices[T any](a, b []T) []T {
-	total := len(a) + len(b)
-	result := make([]T, total)
-	copy(result, a)
-	copy(result[len(a):], b)
-	return result
 }

@@ -123,7 +123,7 @@ func (queries NamedQueries) BuildClassified(
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		switch true {
+		switch {
 		case build.IsPaginatedWithTx():
 			paginatedWithTx = append(paginatedWithTx, build)
 		case build.IsPaginatedWithoutTx():
@@ -277,7 +277,7 @@ func (qo *QueryOptions) execute(
 	cfg *Config,
 	build *QueryOptionsBuild,
 ) (*SearchResponse, error) {
-	switch true {
+	switch {
 	case build.IsPaginatedWithTx():
 		return build.ExecutePaginatedWithTx(ctx, client, cfg)
 	case build.IsPaginatedWithoutTx():

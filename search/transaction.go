@@ -48,7 +48,7 @@ func rollback(tx entx.Transaction, err error) error {
 
 type TxQueryGroupBuilds []*TxQueryGroupBuild
 
-func (builds TxQueryGroupBuilds) execute(
+func (builds TxQueryGroupBuilds) Execute(
 	ctx context.Context,
 	client entx.Client,
 	cfg *Config,
@@ -279,7 +279,7 @@ func (groups TxQueryGroups) Execute(
 	wg, wgctx := errgroup.WithContext(ctx)
 	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
 
-	builds.execute(wgctx, client, cfg, wg, &res)
+	builds.Execute(wgctx, client, cfg, wg, &res)
 	if err := wg.Wait(); err != nil {
 		return nil, err
 	}
