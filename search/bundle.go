@@ -14,7 +14,7 @@ type QueryBundle struct {
 	QueryGroup
 }
 
-func (r *QueryBundle) Execute(
+func (q *QueryBundle) Execute(
 	ctx context.Context,
 	client entx.Client,
 	graph entx.Graph,
@@ -23,21 +23,63 @@ func (r *QueryBundle) Execute(
 	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
-	// TODO
-	return nil, nil
+	if err := q.ValidateAndPreprocessFinal(cfg); err != nil {
+		return nil, err
+	}
+
+	build, err := q.BuildClassified(cfg, graph)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := build.Execute(ctx, client, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
-func (r *QueryBundle) ValidateAndPreprocessFinal(cfg *Config) (countAggregates, countSearches int, err error) {
-	searches, aggregates, err := r.QueryGroup.ValidateAndPreprocess(cfg)
+func (q *QueryBundle) BuildClassified(
+	cfg *Config,
+	graph entx.Graph,
+) (*ClassifiedBuilds, error) {
+	build, err := q.QueryGroup.BuildClassified(cfg, graph)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	countSearches += searches
-	countAggregates += aggregates
 
-	searches, aggregates, err = r.Transactions.ValidateAndPreprocess(cfg)
+	txs, err := q.Transactions.Build(cfg, graph)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
+	}
+	build.Transactions = common.MergeSlices(build.Transactions, txs)
+
+	if ng := len(q.ParallelGroups); ng > 0 {
+		grouped := make([][]*common.ScalarQuery, ng)
+		for i := 0; i < ng; i++ {
+			var grp []*common.ScalarQuery
+			grp, err = q.ParallelGroups[i].BuildScalars(graph)
+			if err != nil {
+				return nil, err
+			}
+			grouped[i] = grp
+		}
+		build.GroupedAggregates = grouped
+	}
+
+	return build, nil
+}
+
+func (r *QueryBundle) ValidateAndPreprocessFinal(cfg *Config) error {
+	countSearches, countAggregates, err := r.QueryGroup.ValidateAndPreprocess(cfg)
+	if err != nil {
+		return err
+	}
+
+	searches, aggregates, err := r.Transactions.ValidateAndPreprocess(cfg)
+	if err != nil {
+		return err
 	}
 	countSearches += searches
 	countAggregates += aggregates
@@ -45,9 +87,16 @@ func (r *QueryBundle) ValidateAndPreprocessFinal(cfg *Config) (countAggregates, 
 	for _, aggregates := range r.ParallelGroups {
 		count, err := aggregates.ValidateAndPreprocess(cfg)
 		if err != nil {
-			return 0, 0, err
+			return err
 		}
 		countAggregates += count
 	}
-	return
+
+	if err := common.CheckMaxSearches(cfg, countSearches); err != nil {
+		return err
+	}
+	if err := common.CheckMaxAggregates(cfg, countAggregates); err != nil {
+		return err
+	}
+	return nil
 }

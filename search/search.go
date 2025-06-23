@@ -13,162 +13,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type NamedQueries []*NamedQuery
-
-// TODO: use ClassifiedBuilds for NamedQueries.Execute
-
-func (queries NamedQueries) Execute(
-	ctx context.Context,
-	client entx.Client,
-	graph entx.Graph,
-	cfg *Config,
-) (SearchesResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
-	defer cancel()
-
-	if err := queries.ValidateAndPreprocessFinal(cfg); err != nil {
-		return nil, err
-	}
-
-	searchOnly, paginatedWithTx, paginatedWithoutTx, err := queries.BuildClassified(cfg, graph)
-	if err != nil {
-		return nil, err
-	}
-
-	countSearchOnly, countPaginatedWithTx, countPaginatedWithoutTx := len(searchOnly), len(paginatedWithTx), len(paginatedWithoutTx)
-	totalSearches := countSearchOnly + countPaginatedWithTx + countPaginatedWithoutTx
-
-	var searchesResponse = common.NewMapSync(make(SearchesResponse, totalSearches))
-	var scalarSync *common.MapSync[string, any]
-	if countPaginatedWithoutTx > 0 {
-		scalarSync = common.NewMapSync(make(map[string]any, countPaginatedWithoutTx))
-	}
-
-	wg, wgctx := errgroup.WithContext(ctx)
-	wg.SetLimit(cfg.MaxParallelWorkersPerRequest)
-
-	for _, build := range searchOnly {
-		wg.Go(func() error {
-			res, err := build.ExecuteSearchOnly(wgctx, client, cfg)
-			if err != nil {
-				return err
-			}
-			searchesResponse.Set(build.Key, res)
-			return nil
-		})
-	}
-
-	for _, build := range paginatedWithTx {
-		wg.Go(func() error {
-			res, err := build.ExecutePaginatedWithTx(wgctx, client, cfg)
-			if err != nil {
-				return err
-			}
-			searchesResponse.Set(build.Key, res)
-			return nil
-		})
-	}
-
-	var paginations map[string]*common.PaginateInfos
-	if countPaginatedWithoutTx > 0 {
-		scalars := make([]*common.ScalarQuery, countPaginatedWithoutTx)
-		paginations = make(map[string]*common.PaginateInfos, countPaginatedWithoutTx)
-
-		for i, build := range paginatedWithoutTx {
-			wg.Go(func() error {
-				res, err := build.ExecuteSearchOnly(wgctx, client, cfg)
-				if err != nil {
-					return err
-				}
-				searchesResponse.Set(build.Key, res)
-				return nil
-			})
-
-			scalars[i] = build.Paginate.ToScalarQuery(build.Key)
-			paginations[build.Key] = build.Paginate
-		}
-
-		common.ExecuteScalarGroupsAsync(
-			wgctx,
-			wg,
-			client,
-			cfg,
-			scalarSync,
-			common.SplitInChunks(scalars, cfg.ScalarQueriesChunkSize)...,
-		)
-	}
-
-	if err := wg.Wait(); err != nil {
-		return nil, err
-	}
-
-	if _, err := common.AttachPaginationSync(searchesResponse, scalarSync, paginations); err != nil {
-		return nil, err
-	}
-
-	return searchesResponse.UnsafeRaw(), nil
-}
-
-func (queries NamedQueries) BuildClassified(
-	cfg *Config,
-	graph entx.Graph,
-) (
-	searchOnly []*NamedQueryBuild,
-	paginatedWithTx []*NamedQueryBuild,
-	paginatedWithoutTx []*NamedQueryBuild,
-	err error,
-) {
-	for i, q := range queries {
-		build, err := q.Build(i, cfg, graph)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		switch {
-		case build.IsPaginatedWithTx():
-			paginatedWithTx = append(paginatedWithTx, build)
-		case build.IsPaginatedWithoutTx():
-			paginatedWithoutTx = append(paginatedWithoutTx, build)
-		default:
-			searchOnly = append(searchOnly, build)
-		}
-	}
-	return
-}
-
-func (queries NamedQueries) Build(conf *Config, graph entx.Graph) ([]*NamedQueryBuild, error) {
-	var builds = make([]*NamedQueryBuild, 0, len(queries))
-	for i, q := range queries {
-		build, err := q.Build(i, conf, graph)
-		if err != nil {
-			return nil, err
-		}
-		builds[i] = build
-	}
-	return builds, nil
-}
-
-func (queries NamedQueries) ValidateAndPreprocessFinal(cfg *Config) error {
-	count, err := queries.ValidateAndPreprocess(cfg)
-	if err != nil {
-		return err
-	}
-
-	return common.CheckMaxSearches(cfg, count)
-}
-
-func (queries NamedQueries) ValidateAndPreprocess(cfg *Config) (count int, err error) {
-	for _, q := range queries {
-		if err = q.ValidateAndPreprocess(cfg); err != nil {
-			return
-		}
-		count++
-	}
-	return
-}
-
 type NamedQueryBuild struct {
 	Key string
 	QueryOptionsBuild
+}
+
+func (build *NamedQueryBuild) ToTxQueryGroupBuild() *TxQueryGroupBuild {
+	return &TxQueryGroupBuild{
+		IsolationLevel: build.TransactionIsolationLevel,
+		QueryGroupBuild: QueryGroupBuild{
+			Searches: []*NamedQueryBuild{build},
+		},
+	}
 }
 
 type NamedQuery struct {
@@ -300,8 +156,8 @@ func (build *QueryOptionsBuild) ExecutePaginatedWithoutTx(
 	client entx.Client,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	if !build.IsPaginatedWithoutTx() {
-		panic("cannot call QueryOptionsBuild.ExecutePaginatedWithTx with nil pagination or with transaction")
+	if !build.IsPaginated() {
+		panic("cannot call QueryOptionsBuild.ExecutePaginatedWithTx with nil pagination")
 	}
 
 	wg, wgctx := errgroup.WithContext(ctx)
@@ -412,6 +268,9 @@ func (build *QueryOptionsBuild) IsSearchOnly() bool {
 }
 func (build *QueryOptionsBuild) IsPaginated() bool {
 	return build.Paginate != nil
+}
+func (build *QueryOptionsBuild) IsTx() bool {
+	return build.EnableTransaction
 }
 func (build *QueryOptionsBuild) IsPaginatedWithTx() bool {
 	return build.Paginate != nil && build.EnableTransaction

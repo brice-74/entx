@@ -31,33 +31,16 @@ func (group *QueryGroup) Execute(
 		return nil, err
 	}
 
-	return nil, nil
+	res, err := build.Execute(ctx, client, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
-type QueryGroupBuildClassified struct {
-	PaginatedWithTx    []*NamedQueryBuild
-	PaginatedWithoutTx []*NamedQueryBuild
-	SearchOnly         []*NamedQueryBuild
-	Aggregates         []*common.ScalarQuery
-}
-
-func (build *QueryGroupBuildClassified) Execute(
-	ctx context.Context,
-	client entx.Client,
-	cfg *Config,
-) {
-	// coupled with NamedQueries, execution is the same, with the addition of aggregates
-}
-
-func (r *QueryGroup) BuildClassified(cfg *Config, graph entx.Graph) (
-	build *QueryGroupBuildClassified,
-	err error,
-) {
-	build = new(QueryGroupBuildClassified)
-	if build.SearchOnly,
-		build.PaginatedWithTx,
-		build.PaginatedWithoutTx,
-		err = r.Searches.BuildClassified(cfg, graph); err != nil {
+func (r *QueryGroup) BuildClassified(cfg *Config, graph entx.Graph) (build *ClassifiedBuilds, err error) {
+	if build, err = r.Searches.BuildClassified(cfg, graph); err != nil {
 		return
 	}
 	if build.Aggregates, err = r.Aggregates.BuildScalars(graph); err != nil {

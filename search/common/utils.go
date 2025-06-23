@@ -22,19 +22,41 @@ type SliceAlias[T any] interface {
 	~[]T
 }
 
-func SplitInChunks[SliceT SliceAlias[ElemT], ElemT any](input SliceT, batchSize int) []SliceT {
-	if batchSize <= 0 || batchSize >= len(input) {
-		if len(input) == 0 {
-			return nil
-		}
+func SplitInChunks[SliceT SliceAlias[ElemT], ElemT any](
+	input SliceT,
+	batchSize int,
+) []SliceT {
+	n := len(input)
+	if n == 0 {
+		return nil
+	}
+	if batchSize <= 0 || batchSize >= n {
 		return []SliceT{input}
 	}
-	var chunks []SliceT
-	for i := 0; i < len(input); i += batchSize {
-		end := min(i+batchSize, len(input))
-		chunks = append(chunks, input[i:end])
+	numChunks := (n + batchSize - 1) / batchSize
+	chunks := make([]SliceT, numChunks)
+	for i := range numChunks {
+		start := i * batchSize
+		end := min(start+batchSize, n)
+		chunks[i] = input[start:end]
 	}
 	return chunks
+}
+
+func MergeSlices[T any](a, b []T) []T {
+	lenA, lenB := len(a), len(b)
+
+	switch {
+	case lenA == 0:
+		return b
+	case lenB == 0:
+		return a
+	default:
+		result := make([]T, lenA+lenB)
+		copy(result, a)
+		copy(result[lenA:], b)
+		return result
+	}
 }
 
 func CheckMaxSearches(cfg *Config, count int) (err error) {

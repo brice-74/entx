@@ -22,36 +22,21 @@ func (builds *ClassifiedBuilds) Execute(
 	client entx.Client,
 	cfg *Config,
 ) (*GroupResponse, error) {
-	nSearch := len(builds.Searches)
-	for _, t := range builds.Transactions {
-		nSearch += len(t.Searches)
-	}
-	nPaginate := 0
-	for _, s := range builds.Searches {
-		if s.IsPaginated() {
-			nPaginate++
-		}
-	}
-	nAgg := len(builds.Aggregates)
-	nGroupAgg := 0
-	for _, grp := range builds.GroupedAggregates {
-		nGroupAgg += len(grp)
-	}
-	totalScalars := nAgg + nPaginate + nGroupAgg
+	s := builds.calculateSizes()
 
 	var (
 		paginations   map[string]*common.PaginateInfos
 		response      common.GroupResponseSync
-		scalarQueries = make([]*common.ScalarQuery, totalScalars)
+		scalarQueries = make([]*common.ScalarQuery, s.TotalScalarQueries)
 	)
-	if nPaginate > 0 {
-		paginations = make(map[string]*common.PaginateInfos, nPaginate)
+	if s.NumPaginated > 0 {
+		paginations = make(map[string]*common.PaginateInfos, s.NumPaginated)
 	}
-	if totalScalars > 0 {
-		response.Aggregates = *common.NewMapSync(make(map[string]any, totalScalars))
+	if s.TotalScalarQueries > 0 {
+		response.Aggregates = *common.NewMapSync(make(map[string]any, s.TotalScalarQueries))
 	}
-	if nSearch > 0 {
-		response.Searches = *common.NewMapSync(make(map[string]*SearchResponse, nSearch))
+	if s.NumSearches > 0 {
+		response.Searches = *common.NewMapSync(make(map[string]*SearchResponse, s.NumSearches))
 	}
 
 	errg, wgctx := errgroup.WithContext(ctx)
@@ -59,40 +44,42 @@ func (builds *ClassifiedBuilds) Execute(
 
 	idx := 0
 	for _, build := range builds.Searches {
-		key := build.Key
 		errg.Go(func() error {
 			res, err := build.ExecuteSearchOnly(wgctx, client, cfg)
 			if err != nil {
 				return err
 			}
-			response.Searches.Set(key, res)
+			response.Searches.Set(build.Key, res)
 			return nil
 		})
 
 		if build.IsPaginated() {
-			paginations[key] = build.Paginate
-			scalarQueries[idx] = build.Paginate.ToScalarQuery(key)
+			paginations[build.Key] = build.Paginate
+			scalarQueries[idx] = build.Paginate.ToScalarQuery(build.Key)
 			idx++
 		}
 	}
 
-	for i := 0; i < nAgg; i++ {
+	for i := 0; i < s.NumAggregates; i++ {
 		scalarQueries[idx] = builds.Aggregates[i]
 		idx++
 	}
 
-	for _, grp := range builds.GroupedAggregates {
-		for _, q := range grp {
-			scalarQueries[idx] = q
+	for i := 0; i < s.NumGroupedAggs; i++ {
+		grp := builds.GroupedAggregates[i]
+		for j := 0; j < len(grp); j++ {
+			scalarQueries[idx] = grp[j]
 			idx++
 		}
 	}
 
-	if totalScalars > 0 {
+	if s.TotalScalarQueries > 0 {
 		chunked := common.SplitInChunks(scalarQueries, cfg.ScalarQueriesChunkSize)
-		groups := mergeSlices(chunked, builds.GroupedAggregates)
+		groups := common.MergeSlices(chunked, builds.GroupedAggregates)
 		common.ExecuteScalarGroupsAsync(wgctx, errg, client, cfg, &response.Aggregates, groups...)
 	}
+
+	builds.Transactions.Execute(wgctx, client, cfg, errg, &response)
 
 	if err := errg.Wait(); err != nil {
 		return nil, err
@@ -105,18 +92,31 @@ func (builds *ClassifiedBuilds) Execute(
 	return (&response).UnsafeResponse(), nil
 }
 
-func mergeSlices[T any](a, b []T) []T {
-	lenA, lenB := len(a), len(b)
+type BuildSizes struct {
+	NumSearches        int
+	NumPaginated       int
+	NumAggregates      int
+	NumGroupedAggs     int
+	TotalScalarQueries int
+}
 
-	switch {
-	case lenA == 0:
-		return b
-	case lenB == 0:
-		return a
-	default:
-		result := make([]T, lenA+lenB)
-		copy(result, a)
-		copy(result[lenA:], b)
-		return result
+func (b *ClassifiedBuilds) calculateSizes() *BuildSizes {
+	m := BuildSizes{}
+	m.NumSearches = len(b.Searches)
+	for _, tx := range b.Transactions {
+		m.NumSearches += len(tx.Searches)
 	}
+	for _, s := range b.Searches {
+		if s.IsPaginated() {
+			m.NumPaginated++
+		}
+	}
+	m.NumAggregates = len(b.Aggregates)
+
+	for _, grp := range b.GroupedAggregates {
+		m.NumGroupedAggs += len(grp)
+	}
+
+	m.TotalScalarQueries = m.NumPaginated + m.NumAggregates + m.NumGroupedAggs
+	return &m
 }
