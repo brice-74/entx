@@ -236,7 +236,7 @@ func (n *UserNode) NewQuery(c entx.Client) entx.Query {
 }
 
 func (n *UserNode) Policy() ent.Policy {
-  return nil
+  return user.Policy
 }
 // ArticleCommentsBridge (O2M) left=Article, right=Comment
 type ArticleCommentsBridge struct {

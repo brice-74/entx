@@ -131,7 +131,9 @@ func (uc *UserCreate) Mutation() *UserMutation {
 
 // Save creates the User in the database.
 func (uc *UserCreate) Save(ctx context.Context) (*User, error) {
-	uc.defaults()
+	if err := uc.defaults(); err != nil {
+		return nil, err
+	}
 	return withHooks(ctx, uc.sqlSave, uc.mutation, uc.hooks)
 }
 
@@ -158,11 +160,12 @@ func (uc *UserCreate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (uc *UserCreate) defaults() {
+func (uc *UserCreate) defaults() error {
 	if _, ok := uc.mutation.IsActive(); !ok {
 		v := user.DefaultIsActive
 		uc.mutation.SetIsActive(v)
 	}
+	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

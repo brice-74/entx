@@ -3,7 +3,6 @@ package e2e_test
 import (
 	"context"
 	"e2e/ent"
-	"e2e/ent/entx"
 	"fmt"
 	"os"
 	"testing"
@@ -11,13 +10,13 @@ import (
 
 	"entgo.io/ent/dialect"
 
-	"github.com/brice-74/entx/search"
+	_ "e2e/ent/runtime"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
 var (
-	client   *ent.Client
-	executor *search.Executor
+	client *ent.Client
 )
 
 func TestMain(m *testing.M) {
@@ -26,12 +25,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-
-	executor = search.NewExecutor(
-		entx.Graph,
-		entx.NewClient(client),
-		search.NewConfig(),
-	)
 
 	exitCode := m.Run()
 	os.Exit(exitCode)

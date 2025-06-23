@@ -1,12 +1,19 @@
 SHELL := /bin/bash
 
+# Runs end-to-end tests from ./e2e/tests/<path>, with coverage for all search/* packages except search/extension
 .PHONY: run/test/e2e
 run/test/e2e:
 	-@docker compose -f ./e2e/docker-compose.yml run \
 		--rm \
-		entx-test-svc sh -c "cd e2e && go test -p 1 -v -vet=off -run \"$(func)\" $(path) -coverpkg=github.com/brice-74/entx/search -coverprofile=./coverage.out" 
+		entx-test-svc sh -c " \
+			cd e2e && \
+			go test -p 1 -v -vet=off \
+				-run \"$(func)\" ./tests/$(path) \
+				-coverpkg=$$(go list github.com/brice-74/entx/search/... | grep -v 'extension$$' | paste -sd "," -) \
+				-coverprofile=./coverage.out \
+		" 
 ifeq ($(DOWN),true)
-	-@$(MAKE) down/mysql
+	@$(MAKE) down/mysql
 endif
 
 down/mysql:

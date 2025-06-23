@@ -10,6 +10,7 @@ import (
 	"e2e/ent/employee"
 	"e2e/ent/predicate"
 	"e2e/ent/user"
+	"errors"
 	"fmt"
 	"math"
 
@@ -437,6 +438,12 @@ func (uq *UserQuery) prepareQuery(ctx context.Context) error {
 			return err
 		}
 		uq.sql = prev
+	}
+	if user.Policy == nil {
+		return errors.New("ent: uninitialized user.Policy (forgotten import ent/runtime?)")
+	}
+	if err := user.Policy.EvalQuery(ctx, uq); err != nil {
+		return err
 	}
 	return nil
 }

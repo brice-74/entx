@@ -1,7 +1,11 @@
 package schema
 
 import (
+	"context"
+	"fmt"
+
 	"entgo.io/ent"
+	"entgo.io/ent/privacy"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
@@ -27,4 +31,19 @@ func (User) Edges() []ent.Edge {
 		edge.To("comments", Comment.Type),
 		edge.To("employee", Employee.Type).Unique(),
 	}
+}
+
+func (User) Policy() ent.Policy {
+	return privacy.Policy{
+		Query: privacy.QueryPolicy{
+			CustomPolicy{},
+		},
+	}
+}
+
+type CustomPolicy struct{}
+
+func (CustomPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
+	fmt.Printf("%+v | %T\n", ctx.Value("aaa"), q)
+	return privacy.Allow
 }

@@ -2,7 +2,42 @@
 
 package runtime
 
-// The schema-stitching logic is generated in e2e/ent/runtime.go
+import (
+	"context"
+	"e2e/ent/article"
+	"e2e/ent/user"
+	"e2e/schema"
+
+	"entgo.io/ent"
+	"entgo.io/ent/privacy"
+)
+
+// The init function reads all schema descriptors with runtime code
+// (default values, validators, hooks and policies) and stitches it
+// to their package variables.
+func init() {
+	articleFields := schema.Article{}.Fields()
+	_ = articleFields
+	// articleDescPublished is the schema descriptor for published field.
+	articleDescPublished := articleFields[3].Descriptor()
+	// article.DefaultPublished holds the default value on creation for the published field.
+	article.DefaultPublished = articleDescPublished.Default.(bool)
+	user.Policy = privacy.NewPolicies(schema.User{})
+	user.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := user.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	userFields := schema.User{}.Fields()
+	_ = userFields
+	// userDescIsActive is the schema descriptor for is_active field.
+	userDescIsActive := userFields[3].Descriptor()
+	// user.DefaultIsActive holds the default value on creation for the is_active field.
+	user.DefaultIsActive = userDescIsActive.Default.(bool)
+}
 
 const (
 	Version = "v0.14.4"                                         // Version of ent codegen.

@@ -2,20 +2,26 @@ package e2e_test
 
 import (
 	"context"
+	"e2e/ent/entx"
 	"testing"
-	"time"
 
 	"github.com/brice-74/entx/search"
-	"github.com/stretchr/testify/assert"
+	"github.com/brice-74/entx/search/common"
 )
 
 func TestXxx(t *testing.T) {
-	req := search.QueryBundle{}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
-	if res, err := executor.QueryBundle(ctx, &req); assert.NoError(t, err) {
-
+	opts := search.TargetedQuery{
+		From: "User",
+		QueryOptions: search.QueryOptions{
+			WithPagination: true,
+		},
 	}
+
+	ctx := context.WithValue(context.Background(), "aaa", "ma valueee !!!!!!")
+
+	v, err := opts.Execute(ctx, entx.NewClient(client), entx.Graph, &common.DefaultConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(v)
 }

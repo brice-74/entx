@@ -107,9 +107,6 @@ func handleValuer(dest any) (any, error) {
 }
 
 func ExecuteScalars(ctx context.Context, client entx.Client, resp map[string]any, scalars ...*ScalarQuery) error {
-	if resp == nil {
-		panic("response map must be non nil")
-	}
 	vals, err := executeScalars(ctx, client, scalars...)
 	if err != nil {
 		return err
@@ -121,9 +118,6 @@ func ExecuteScalars(ctx context.Context, client entx.Client, resp map[string]any
 }
 
 func ExecuteScalarsAsync(ctx context.Context, client entx.Client, resp *MapSync[string, any], scalars ...*ScalarQuery) error {
-	if resp == nil {
-		panic("MapSync pointer must be non nil")
-	}
 	vals, err := executeScalars(ctx, client, scalars...)
 	if err != nil {
 		return err
@@ -144,9 +138,6 @@ func ExecuteScalarGroupsAsync(
 	response *MapSync[string, any],
 	scalarGroups ...[]*ScalarQuery,
 ) {
-	if response == nil {
-		panic("MapSync pointer must be non nil")
-	}
 	if len(scalarGroups) == 0 {
 		return
 	}
@@ -182,9 +173,6 @@ func ExecuteScalarGroups(
 	response map[string]any,
 	scalarGroups ...[]*ScalarQuery,
 ) (err error) {
-	if response == nil {
-		panic("response map must be non nil")
-	}
 	if len(scalarGroups) == 0 {
 		return
 	}
