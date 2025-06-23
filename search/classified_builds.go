@@ -60,14 +60,14 @@ func (builds *ClassifiedBuilds) Execute(
 		}
 	}
 
-	for i := 0; i < s.NumAggregates; i++ {
+	for i := range s.NumAggregates {
 		scalarQueries[idx] = builds.Aggregates[i]
 		idx++
 	}
 
-	for i := 0; i < s.NumGroupedAggs; i++ {
+	for i := range s.NumGroupedAggs {
 		grp := builds.GroupedAggregates[i]
-		for j := 0; j < len(grp); j++ {
+		for j := range grp {
 			scalarQueries[idx] = grp[j]
 			idx++
 		}

@@ -57,7 +57,7 @@ func (q *QueryBundle) BuildClassified(
 
 	if ng := len(q.ParallelGroups); ng > 0 {
 		grouped := make([][]*common.ScalarQuery, ng)
-		for i := 0; i < ng; i++ {
+		for i := range ng {
 			var grp []*common.ScalarQuery
 			grp, err = q.ParallelGroups[i].BuildScalars(graph)
 			if err != nil {
