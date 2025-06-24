@@ -3,6 +3,8 @@ package common
 import (
 	"database/sql"
 	"time"
+
+	"entgo.io/ent/dialect"
 )
 
 type SortConfig struct {
@@ -51,6 +53,7 @@ type Option func(*Config)
 
 // defaultConf is the configuration with the fewest restrictions to make the hub functional.
 var defaultConf = Config{
+	Dialect: dialect.MySQL,
 	Transaction: TransactionConfig{
 		EnablePaginateQuery:       true,
 		AllowClientIsolationLevel: true,
@@ -74,6 +77,7 @@ type TransactionConfig struct {
 }
 
 type Config struct {
+	Dialect     string
 	Transaction TransactionConfig
 	// Timeouts
 	RequestTimeout   time.Duration // includes a global call to an Execute method

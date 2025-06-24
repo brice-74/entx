@@ -146,20 +146,20 @@ func (b *BaseAggregate) preprocess(filterCfg *common.FilterConfig, allowEmptyFie
 	return nil
 }
 
-func applyBridgesInverseJoins(sel *sql.Selector, bridges []entx.Bridge, base *sql.SelectTable) (*sql.SelectTable, error) {
+func applyBridgesInverseJoins(sel *sql.Selector, bridges []entx.Bridge, base *sql.SelectTable) *sql.SelectTable {
 	prev := base
 	for i := len(bridges) - 1; i >= 1; i-- {
 		joins := bridges[i].Inverse().Join(sel, prev)
 		prev = joins[0]
 	}
-	return prev, nil
+	return prev
 }
 
 type Aggregate struct {
 	BaseAggregate
 }
 
-func (a *Aggregate) Predicate(root entx.Node) (func(*sql.Selector), string, error) {
+func (a *Aggregate) Predicate(ctx context.Context, root entx.Node, dialect string) (func(*sql.Selector), string, error) {
 	if !a.preprocessed {
 		panic("Aggregate.Predicate: called before preprocess")
 	}
@@ -172,6 +172,19 @@ func (a *Aggregate) Predicate(root entx.Node) (func(*sql.Selector), string, erro
 		}
 	}
 
+	var preds []func(*sql.Selector)
+
+	// apply policy only on the last nested node
+	if len(bridges) > 0 {
+		policyPred, err := common.EnforcePolicy(ctx, bridges[len(bridges)-1].Child(), common.OpAggregate)
+		if err != nil {
+			return nil, "", err
+		}
+		if policyPred != nil {
+			preds = append(preds, policyPred)
+		}
+	}
+
 	tbl := sql.Table(node.Table()).As("t0")
 	fn, expr, alias, err := a.BaseAggregate.buildExpr(tbl, finalField)
 	if err != nil {
@@ -179,32 +192,20 @@ func (a *Aggregate) Predicate(root entx.Node) (func(*sql.Selector), string, erro
 	}
 	a.Alias = alias
 
-	preds, err := a.BaseAggregate.Filters.Predicate(node)
+	filtersPreds, err := a.BaseAggregate.Filters.Predicate(node)
 	if err != nil {
 		return nil, "", err
 	}
+	preds = append(preds, filtersPreds...)
+
+	sub := sql.Dialect(dialect).Select(fn(expr)).From(tbl)
+	last := applyBridgesInverseJoins(sub, bridges, tbl)
+
+	for _, p := range preds {
+		p(sub)
+	}
 
 	modifier := func(s *sql.Selector) {
-		// apply policy only if nested
-		if len(bridges) > 0 {
-			if pol := bridges[len(bridges)-1].Child().Policy(); pol != nil {
-				if err := pol.EvalQuery(s.Context(), nil); err != nil {
-					s.AddError(err)
-					return
-				}
-			}
-		}
-
-		sub := sql.Dialect(s.Dialect()).Select(fn(expr)).From(tbl)
-		last, err := applyBridgesInverseJoins(sub, bridges, tbl)
-		if err != nil {
-			s.AddError(err)
-			return
-		}
-
-		for _, p := range preds {
-			p(sub)
-		}
 		// if no bridges, link on primary key
 		if len(bridges) > 0 {
 			relInfo := bridges[0].RelInfos()
@@ -228,7 +229,7 @@ func (a *Aggregate) Predicate(root entx.Node) (func(*sql.Selector), string, erro
 
 type Aggregates []*Aggregate
 
-func (as Aggregates) Predicate(node entx.Node) ([]func(*sql.Selector), []string, error) {
+func (as Aggregates) Predicate(ctx context.Context, root entx.Node, dialect string) ([]func(*sql.Selector), []string, error) {
 	lenAggregates := len(as)
 	if lenAggregates == 0 {
 		return nil, nil, nil
@@ -239,7 +240,7 @@ func (as Aggregates) Predicate(node entx.Node) ([]func(*sql.Selector), []string,
 		appliesAgg = make([]func(*sql.Selector), 0, lenAggregates)
 	)
 	for _, a := range as {
-		apply, field, err := a.Predicate(node)
+		apply, field, err := a.Predicate(ctx, root, dialect)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -305,12 +306,17 @@ func (a *OverallAggregate) resolveField(registry entx.Graph) (node entx.Node, fi
 }
 
 // Build constructs a standalone selector for the overall aggregate.
-func (a *OverallAggregate) Build(graph entx.Graph) (*sql.Selector, string, error) {
+func (a *OverallAggregate) Build(ctx context.Context, graph entx.Graph, dialect string) (*sql.Selector, string, error) {
 	if !a.preprocessed {
 		panic("OverallAggregate.Build: called before preprocess")
 	}
 
 	node, field, err := a.resolveField(graph)
+	if err != nil {
+		return nil, "", err
+	}
+
+	policyPred, err := common.EnforcePolicy(ctx, node, common.OpAggregateOverall)
 	if err != nil {
 		return nil, "", err
 	}
@@ -322,13 +328,10 @@ func (a *OverallAggregate) Build(graph entx.Graph) (*sql.Selector, string, error
 	}
 	a.Alias = alias
 
-	sel := (&sql.Selector{}).From(tbl)
-	if pol := node.Policy(); pol != nil {
-		if err := pol.EvalQuery(sel.Context(), nil); err != nil {
-			return nil, "", err
-		}
+	sel := sql.Dialect(dialect).Select(fn(expr)).As(alias).From(tbl)
+	if policyPred != nil {
+		policyPred(sel)
 	}
-
 	if preds, err := a.BaseAggregate.Filters.Predicate(node); err != nil {
 		return nil, "", err
 	} else if len(preds) > 0 {
@@ -337,12 +340,11 @@ func (a *OverallAggregate) Build(graph entx.Graph) (*sql.Selector, string, error
 		}
 	}
 
-	sel = sel.Select(fn(expr)).As(alias)
 	return sel, alias, nil
 }
 
-func (a *OverallAggregate) BuildScalar(graph entx.Graph) (*common.ScalarQuery, error) {
-	sel, alias, err := a.Build(graph)
+func (a *OverallAggregate) BuildScalar(ctx context.Context, graph entx.Graph, dialect string) (*common.ScalarQuery, error) {
+	sel, alias, err := a.Build(ctx, graph, dialect)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +391,7 @@ func (oas OverallAggregates) Execute(
 		return nil, err
 	}
 
-	scalars, err := oas.BuildScalars(graph)
+	scalars, err := oas.BuildScalars(ctx, graph, cfg.Dialect)
 	if err != nil {
 		return nil, err
 	}
@@ -409,12 +411,12 @@ func (oas OverallAggregates) Execute(
 	return res.UnsafeRaw(), nil
 }
 
-func (oas OverallAggregates) BuildScalars(graph entx.Graph) ([]*common.ScalarQuery, error) {
+func (oas OverallAggregates) BuildScalars(ctx context.Context, graph entx.Graph, dialect string) ([]*common.ScalarQuery, error) {
 	if length := len(oas); length > 0 {
 		var scalars = make([]*common.ScalarQuery, 0, length)
 
 		for i, oa := range oas {
-			s, err := oa.BuildScalar(graph)
+			s, err := oa.BuildScalar(ctx, graph, dialect)
 			if err != nil {
 				return nil, err
 			}

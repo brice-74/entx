@@ -43,7 +43,7 @@ func (r *QueryGroup) BuildClassified(ctx context.Context, cfg *Config, graph ent
 	if build, err = r.Searches.BuildClassified(ctx, cfg, graph); err != nil {
 		return
 	}
-	if build.Aggregates, err = r.Aggregates.BuildScalars(graph); err != nil {
+	if build.Aggregates, err = r.Aggregates.BuildScalars(ctx, graph, cfg.Dialect); err != nil {
 		return
 	}
 	return
@@ -71,7 +71,7 @@ func (r *QueryGroup) Build(ctx context.Context, cfg *Config, graph entx.Graph) (
 	if build.Searches, err = r.Searches.Build(ctx, cfg, graph); err != nil {
 		return
 	}
-	if build.Aggregates, err = r.Aggregates.BuildScalars(graph); err != nil {
+	if build.Aggregates, err = r.Aggregates.BuildScalars(ctx, graph, cfg.Dialect); err != nil {
 		return
 	}
 	return

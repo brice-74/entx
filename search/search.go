@@ -287,7 +287,7 @@ func (build *QueryOptionsBuild) IsPaginatedWithoutTx() bool {
 
 func (qo *QueryOptions) Build(
 	ctx context.Context,
-	conf *Config,
+	cfg *Config,
 	node entx.Node,
 ) (*QueryOptionsBuild, error) {
 	var (
@@ -304,18 +304,24 @@ func (qo *QueryOptions) Build(
 		preds = append(preds, policyPred)
 	}
 
-	if ps, fields, err := qo.Aggregates.Predicate(node); err != nil {
-		return nil, err
-	} else if len(ps) > 0 {
-		aggFields = fields
-		preds = append(preds, ps...)
-	}
-
 	filtPreds, err := qo.Filters.Predicate(node)
 	if err != nil {
 		return nil, err
 	} else if len(filtPreds) > 0 {
 		preds = append(preds, filtPreds...)
+	}
+
+	// catch preds here to have only filters and policy predictions
+	countSel, err := qo.scalarCountSelector(node, cfg.Dialect, preds...)
+	if err != nil {
+		return nil, err
+	}
+
+	if ps, fields, err := qo.Aggregates.Predicate(ctx, node, cfg.Dialect); err != nil {
+		return nil, err
+	} else if len(ps) > 0 {
+		aggFields = fields
+		preds = append(preds, ps...)
 	}
 
 	if ps, err := qo.Sort.Predicate(node); err != nil {
@@ -326,17 +332,12 @@ func (qo *QueryOptions) Build(
 
 	preds = append(preds, qo.Pageable.Predicate(true))
 
-	countSel, err := qo.scalarCountSelector(node, filtPreds...)
-	if err != nil {
-		return nil, err
-	}
-
 	selectApply, err := qo.Select.PredicateQ(node)
 	if err != nil {
 		return nil, err
 	}
 
-	incApplies, err := qo.Includes.PredicateQs(node)
+	incApplies, err := qo.Includes.PredicateQs(ctx, node, cfg.Dialect)
 	if err != nil {
 		return nil, err
 	}
@@ -367,8 +368,8 @@ func (qo *QueryOptions) Build(
 
 	res := QueryOptionsBuild{
 		ExecFn:                    execute,
-		EnableTransaction:         conf.Transaction.EnablePaginateQuery,
-		TransactionIsolationLevel: conf.Transaction.IsolationLevel,
+		EnableTransaction:         cfg.Transaction.EnablePaginateQuery,
+		TransactionIsolationLevel: cfg.Transaction.IsolationLevel,
 	}
 
 	if qo.EnableTransaction != nil {
@@ -390,19 +391,13 @@ func (qo *QueryOptions) Build(
 	return &res, err
 }
 
-func (qo *QueryOptions) scalarCountSelector(node entx.Node, preds ...func(*sql.Selector)) (*sql.Selector, error) {
+func (qo *QueryOptions) scalarCountSelector(node entx.Node, dialect string, preds ...func(*sql.Selector)) (*sql.Selector, error) {
 	if !qo.WithPagination {
 		return nil, nil
 	}
 
-	sel := sql.Select(sql.Count("*")).
+	sel := sql.Dialect(dialect).Select(sql.Count("*")).
 		From(sql.Table(node.Table()).As("t0"))
-
-	if pol := node.Policy(); pol != nil {
-		if err := pol.EvalQuery(sel.Context(), nil); err != nil {
-			return nil, err
-		}
-	}
 
 	for _, p := range preds {
 		p(sel)

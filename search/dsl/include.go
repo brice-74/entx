@@ -11,10 +11,10 @@ import (
 
 type Includes []*Include
 
-func (incs Includes) PredicateQs(node entx.Node) ([]func(entx.Query), error) {
+func (incs Includes) PredicateQs(ctx context.Context, node entx.Node, dialect string) ([]func(entx.Query), error) {
 	var applies = make([]func(entx.Query), 0, len(incs))
 	for i, inc := range incs {
-		applicator, err := inc.PredicateQ(node)
+		applicator, err := inc.PredicateQ(ctx, node, dialect)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +55,7 @@ type Include struct {
 	preprocessed  bool
 }
 
-func (inc *Include) PredicateQ(ctx context.Context, node entx.Node) (func(entx.Query), error) {
+func (inc *Include) PredicateQ(ctx context.Context, node entx.Node, dialect string) (func(entx.Query), error) {
 	if !inc.preprocessed {
 		panic("Include.PredicateQ: called before preprocess")
 	}
@@ -94,7 +94,7 @@ func (inc *Include) PredicateQ(ctx context.Context, node entx.Node) (func(entx.Q
 		bridges[i] = bridge
 	}
 
-	if ps, fields, err := inc.Aggregates.Predicate(current); err != nil {
+	if ps, fields, err := inc.Aggregates.Predicate(ctx, current, dialect); err != nil {
 		return nil, err
 	} else if len(ps) > 0 {
 		aggFields = fields
@@ -118,7 +118,7 @@ func (inc *Include) PredicateQ(ctx context.Context, node entx.Node) (func(entx.Q
 		return nil, err
 	}
 
-	incApplies, err := inc.Includes.PredicateQs(current)
+	incApplies, err := inc.Includes.PredicateQs(ctx, current, dialect)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +138,10 @@ func (inc *Include) PredicateQ(ctx context.Context, node entx.Node) (func(entx.Q
 				}, entx.AddAggregatesFromValues(aggFields...))
 			} else {
 				bridge.Include(q, func(qChild entx.Query) { childQ = qChild })
+			}
+
+			if pred := bridgesPoliciesPreds[i]; pred != nil {
+				childQ.Predicate(pred)
 			}
 
 			childQ.Predicate(inc.Limit.Predicate())

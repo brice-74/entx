@@ -20,15 +20,18 @@ type QueryOp string
 const (
 	OpAggregate        QueryOp = "Aggregate"
 	OpAggregateOverall QueryOp = "AggregateOverall"
-	OpCountPaginate    QueryOp = "CountPaginate"
 	OpRootQuery        QueryOp = "RootQuery"
 	OpIncludeQuery     QueryOp = "IncludeQuery"
 	OpLastIncludeQuery QueryOp = "IncludeQuery"
 )
 
+// QueryPolicy must be placed first in the policy rules and does not skip
+// to the next rule to avoid duplicate policy calls due to the hybrid operation of the search module.
+// Don't worry about your other policies:
+// if the search module isn't used, its policies will be skipped to the next ones.
 type QueryPolicy struct {
 	// Enforcer is called during build phases of:
-	// paginate count | aggregate | overall agreggate | base query | include
+	// aggregate | overall agreggate | base query | include
 	Enforcer func(context.Context, QueryOp) (func(*sql.Selector), error)
 }
 
@@ -70,10 +73,7 @@ func EnforcePolicy(ctx context.Context, node entx.Node, op QueryOp) (func(*sql.S
 	m := QueryModifier{
 		Op: op,
 	}
-	if err := node.Policy().EvalQuery(
-		ctx,
-		&m,
-	); err != nil {
+	if err := node.Policy().EvalQuery(ctx, &m); err != nil {
 		return nil, err
 	}
 	return m.Modifier, nil

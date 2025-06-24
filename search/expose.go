@@ -16,9 +16,9 @@ type QueryOp = common.QueryOp
 
 const OpAggregate = common.OpAggregate
 const OpAggregateOverall = common.OpAggregateOverall
-const OpCountPaginate = common.OpCountPaginate
 const OpRootQuery = common.OpRootQuery
 const OpIncludeQuery = common.OpIncludeQuery
+const OpLastIncludeQuery = common.OpLastIncludeQuery
 
 type AggregatesResponse = common.AggregatesResponse
 type MetaResponse = common.MetaResponse
