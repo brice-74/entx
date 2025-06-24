@@ -32,7 +32,12 @@ type NamedQuery struct {
 	TargetedQuery
 }
 
-func (q *NamedQuery) Build(uniqueIndex int, conf *Config, graph entx.Graph) (
+func (q *NamedQuery) Build(
+	ctx context.Context,
+	uniqueIndex int,
+	cfg *Config,
+	graph entx.Graph,
+) (
 	*NamedQueryBuild,
 	error,
 ) {
@@ -40,7 +45,7 @@ func (q *NamedQuery) Build(uniqueIndex int, conf *Config, graph entx.Graph) (
 		q.Key = fmt.Sprintf("search_%d", uniqueIndex+1)
 	}
 
-	build, err := q.TargetedQuery.Build(conf, graph)
+	build, err := q.TargetedQuery.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +67,14 @@ func (q *TargetedQuery) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := q.ValidateAndPreprocess(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := q.Build(cfg, graph)
+	build, err := q.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +83,7 @@ func (q *TargetedQuery) Execute(
 }
 
 func (q *TargetedQuery) Build(
+	ctx context.Context,
 	conf *Config,
 	registry entx.Graph,
 ) (*QueryOptionsBuild, error) {
@@ -89,7 +95,7 @@ func (q *TargetedQuery) Build(
 		}
 	}
 
-	return q.QueryOptions.Build(conf, node)
+	return q.QueryOptions.Build(ctx, conf, node)
 }
 
 type QueryOptions struct {
@@ -112,14 +118,14 @@ func (qo *QueryOptions) Execute(
 	node entx.Node,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := qo.ValidateAndPreprocess(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := qo.Build(cfg, node)
+	build, err := qo.Build(ctx, cfg, node)
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +286,7 @@ func (build *QueryOptionsBuild) IsPaginatedWithoutTx() bool {
 }
 
 func (qo *QueryOptions) Build(
+	ctx context.Context,
 	conf *Config,
 	node entx.Node,
 ) (*QueryOptionsBuild, error) {
@@ -287,6 +294,16 @@ func (qo *QueryOptions) Build(
 		aggFields []string
 		preds     []func(*sql.Selector)
 	)
+
+	policyPred, err := common.EnforcePolicy(ctx, node, OpRootQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	if policyPred != nil {
+		preds = append(preds, policyPred)
+	}
+
 	if ps, fields, err := qo.Aggregates.Predicate(node); err != nil {
 		return nil, err
 	} else if len(ps) > 0 {

@@ -182,14 +182,14 @@ func (group *TxQueryGroup) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := group.ValidateAndPreprocessFinal(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := group.Build(cfg, graph)
+	build, err := group.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (group *TxQueryGroup) Execute(
 	return build.Execute(ctx, client, cfg)
 }
 
-func (r *TxQueryGroup) Build(cfg *Config, graph entx.Graph) (*TxQueryGroupBuild, error) {
+func (r *TxQueryGroup) Build(ctx context.Context, cfg *Config, graph entx.Graph) (*TxQueryGroupBuild, error) {
 	txBuild := new(TxQueryGroupBuild)
 	if r.TransactionIsolationLevel != nil {
 		txBuild.IsolationLevel = *r.TransactionIsolationLevel
@@ -205,7 +205,7 @@ func (r *TxQueryGroup) Build(cfg *Config, graph entx.Graph) (*TxQueryGroupBuild,
 		txBuild.IsolationLevel = cfg.Transaction.IsolationLevel
 	}
 
-	build, err := r.QueryGroup.Build(cfg, graph)
+	build, err := r.QueryGroup.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (groups TxQueryGroups) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	countSearches, countAggregates, err := groups.ValidateAndPreprocessFinal(cfg)
@@ -261,7 +261,7 @@ func (groups TxQueryGroups) Execute(
 		return nil, err
 	}
 
-	builds, err := groups.Build(cfg, graph)
+	builds, err := groups.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -287,10 +287,10 @@ func (groups TxQueryGroups) Execute(
 	return res.UnsafeResponse(), nil
 }
 
-func (groups TxQueryGroups) Build(cfg *Config, graph entx.Graph) (TxQueryGroupBuilds, error) {
+func (groups TxQueryGroups) Build(ctx context.Context, cfg *Config, graph entx.Graph) (TxQueryGroupBuilds, error) {
 	var builds = make(TxQueryGroupBuilds, 0, len(groups))
 	for i, group := range groups {
-		build, err := group.Build(cfg, graph)
+		build, err := group.Build(ctx, cfg, graph)
 		if err != nil {
 			return nil, err
 		}

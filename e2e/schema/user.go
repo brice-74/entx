@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/privacy"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"github.com/brice-74/entx/search"
 )
 
 type User struct {
@@ -36,14 +38,20 @@ func (User) Edges() []ent.Edge {
 func (User) Policy() ent.Policy {
 	return privacy.Policy{
 		Query: privacy.QueryPolicy{
-			CustomPolicy{},
+			search.QueryPolicy{
+				Enforcer: func(ctx context.Context, qo search.QueryOp) (func(*sql.Selector), error) {
+					fmt.Printf("search.QueryPolicy OnScalarBuild call: %+v\n", ctx.Value("aaa"))
+					return nil, nil
+				},
+			},
+			OtherPolicy{},
 		},
 	}
 }
 
-type CustomPolicy struct{}
+type OtherPolicy struct{}
 
-func (CustomPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
-	fmt.Printf("%+v | %T\n", ctx.Value("aaa"), q)
+func (OtherPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
+	fmt.Printf("OtherPolicy call: %+v | %T\n", ctx.Value("aaa"), q)
 	return privacy.Allow
 }

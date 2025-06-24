@@ -20,14 +20,14 @@ func (q *QueryBundle) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := q.ValidateAndPreprocessFinal(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := q.BuildClassified(cfg, graph)
+	build, err := q.BuildClassified(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -41,15 +41,16 @@ func (q *QueryBundle) Execute(
 }
 
 func (q *QueryBundle) BuildClassified(
+	ctx context.Context,
 	cfg *Config,
 	graph entx.Graph,
 ) (*ClassifiedBuilds, error) {
-	build, err := q.QueryGroup.BuildClassified(cfg, graph)
+	build, err := q.QueryGroup.BuildClassified(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
 
-	txs, err := q.Transactions.Build(cfg, graph)
+	txs, err := q.Transactions.Build(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}

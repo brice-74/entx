@@ -15,14 +15,14 @@ func (queries NamedQueries) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (SearchesResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := queries.ValidateAndPreprocessFinal(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := queries.BuildClassified(cfg, graph)
+	build, err := queries.BuildClassified(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -36,12 +36,13 @@ func (queries NamedQueries) Execute(
 }
 
 func (queries NamedQueries) BuildClassified(
+	ctx context.Context,
 	cfg *Config,
 	graph entx.Graph,
 ) (*ClassifiedBuilds, error) {
 	builds := new(ClassifiedBuilds)
 	for i, q := range queries {
-		build, err := q.Build(i, cfg, graph)
+		build, err := q.Build(ctx, i, cfg, graph)
 		if err != nil {
 			return nil, err
 		}
@@ -55,10 +56,10 @@ func (queries NamedQueries) BuildClassified(
 	return builds, nil
 }
 
-func (queries NamedQueries) Build(conf *Config, graph entx.Graph) ([]*NamedQueryBuild, error) {
+func (queries NamedQueries) Build(ctx context.Context, cfg *Config, graph entx.Graph) ([]*NamedQueryBuild, error) {
 	var builds = make([]*NamedQueryBuild, 0, len(queries))
 	for i, q := range queries {
-		build, err := q.Build(i, conf, graph)
+		build, err := q.Build(ctx, i, cfg, graph)
 		if err != nil {
 			return nil, err
 		}

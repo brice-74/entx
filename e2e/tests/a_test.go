@@ -12,9 +12,6 @@ import (
 func TestXxx(t *testing.T) {
 	opts := search.TargetedQuery{
 		From: "User",
-		QueryOptions: search.QueryOptions{
-			WithPagination: true,
-		},
 	}
 
 	ctx := context.WithValue(context.Background(), "aaa", "ma valueee !!!!!!")

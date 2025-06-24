@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"context"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
@@ -54,13 +55,28 @@ type Include struct {
 	preprocessed  bool
 }
 
-func (inc *Include) PredicateQ(node entx.Node) (func(entx.Query), error) {
+func (inc *Include) PredicateQ(ctx context.Context, node entx.Node) (func(entx.Query), error) {
 	if !inc.preprocessed {
 		panic("Include.PredicateQ: called before preprocess")
 	}
+
+	var (
+		aggFields []string
+		preds     []func(*sql.Selector)
+	)
+
+	policyPred, err := common.EnforcePolicy(ctx, node, common.OpLastIncludeQuery)
+	if err != nil {
+		return nil, err
+	}
+	preds = append(preds, policyPred)
+
 	current := node
-	var bridges = make([]entx.Bridge, 0, len(inc.relationParts))
-	for _, rel := range inc.relationParts {
+	var (
+		bridges              = make([]entx.Bridge, 0, len(inc.relationParts))
+		bridgesPoliciesPreds = make([]func(*sql.Selector), 0, len(inc.relationParts))
+	)
+	for i, rel := range inc.relationParts {
 		bridge := current.Bridge(rel)
 		if bridge == nil {
 			return nil, &common.QueryBuildError{
@@ -69,14 +85,15 @@ func (inc *Include) PredicateQ(node entx.Node) (func(entx.Query), error) {
 			}
 		}
 
-		bridges = append(bridges, bridge)
 		current = bridge.Child()
+		policyPred, err := common.EnforcePolicy(ctx, current, common.OpIncludeQuery)
+		if err != nil {
+			return nil, err
+		}
+		bridgesPoliciesPreds[i] = policyPred
+		bridges[i] = bridge
 	}
 
-	var (
-		aggFields []string
-		preds     []func(*sql.Selector)
-	)
 	if ps, fields, err := inc.Aggregates.Predicate(current); err != nil {
 		return nil, err
 	} else if len(ps) > 0 {

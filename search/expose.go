@@ -11,6 +11,15 @@ type ExecError = common.ExecError
 
 type Config = common.Config
 
+type QueryPolicy = common.QueryPolicy
+type QueryOp = common.QueryOp
+
+const OpAggregate = common.OpAggregate
+const OpAggregateOverall = common.OpAggregateOverall
+const OpCountPaginate = common.OpCountPaginate
+const OpRootQuery = common.OpRootQuery
+const OpIncludeQuery = common.OpIncludeQuery
+
 type AggregatesResponse = common.AggregatesResponse
 type MetaResponse = common.MetaResponse
 type MetaSearchResponse = common.MetaSearchResponse

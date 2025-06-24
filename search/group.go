@@ -19,14 +19,14 @@ func (group *QueryGroup) Execute(
 	graph entx.Graph,
 	cfg *Config,
 ) (*GroupResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.RequestTimeout)
+	ctx, cancel := common.ContextTimeout(common.ContextWithPolicyToken(ctx), cfg.RequestTimeout)
 	defer cancel()
 
 	if err := group.ValidateAndPreprocessFinal(cfg); err != nil {
 		return nil, err
 	}
 
-	build, err := group.BuildClassified(cfg, graph)
+	build, err := group.BuildClassified(ctx, cfg, graph)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +39,8 @@ func (group *QueryGroup) Execute(
 	return res, nil
 }
 
-func (r *QueryGroup) BuildClassified(cfg *Config, graph entx.Graph) (build *ClassifiedBuilds, err error) {
-	if build, err = r.Searches.BuildClassified(cfg, graph); err != nil {
+func (r *QueryGroup) BuildClassified(ctx context.Context, cfg *Config, graph entx.Graph) (build *ClassifiedBuilds, err error) {
+	if build, err = r.Searches.BuildClassified(ctx, cfg, graph); err != nil {
 		return
 	}
 	if build.Aggregates, err = r.Aggregates.BuildScalars(graph); err != nil {
@@ -63,12 +63,12 @@ func (build *QueryGroupBuild) CountPaginations() (count int) {
 	return
 }
 
-func (r *QueryGroup) Build(cfg *Config, graph entx.Graph) (
+func (r *QueryGroup) Build(ctx context.Context, cfg *Config, graph entx.Graph) (
 	build *QueryGroupBuild,
 	err error,
 ) {
 	build = new(QueryGroupBuild)
-	if build.Searches, err = r.Searches.Build(cfg, graph); err != nil {
+	if build.Searches, err = r.Searches.Build(ctx, cfg, graph); err != nil {
 		return
 	}
 	if build.Aggregates, err = r.Aggregates.BuildScalars(graph); err != nil {
