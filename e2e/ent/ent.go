@@ -10,6 +10,7 @@ import (
 	"e2e/ent/department"
 	"e2e/ent/employee"
 	"e2e/ent/tag"
+	"e2e/ent/teststate"
 	"e2e/ent/user"
 	"errors"
 	"fmt"
@@ -85,6 +86,7 @@ func checkColumn(table, column string) error {
 			department.Table: department.ValidColumn,
 			employee.Table:   employee.ValidColumn,
 			tag.Table:        tag.ValidColumn,
+			teststate.Table:  teststate.ValidColumn,
 			user.Table:       user.ValidColumn,
 		})
 	})

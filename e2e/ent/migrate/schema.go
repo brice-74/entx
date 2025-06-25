@@ -140,6 +140,18 @@ var (
 		Columns:    TagsColumns,
 		PrimaryKey: []*schema.Column{TagsColumns[0]},
 	}
+	// TestStatesColumns holds the columns for the "test_states" table.
+	TestStatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "key", Type: field.TypeString, Unique: true},
+		{Name: "done", Type: field.TypeBool},
+	}
+	// TestStatesTable holds the schema information for the "test_states" table.
+	TestStatesTable = &schema.Table{
+		Name:       "test_states",
+		Columns:    TestStatesColumns,
+		PrimaryKey: []*schema.Column{TestStatesColumns[0]},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -164,6 +176,7 @@ var (
 		DepartmentsTable,
 		EmployeesTable,
 		TagsTable,
+		TestStatesTable,
 		UsersTable,
 	}
 )

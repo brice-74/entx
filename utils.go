@@ -48,7 +48,7 @@ func ToInterceptor[T Entity](handlers ...EntityHandler) ent.Interceptor {
 				return nil, fmt.Errorf("query result value (%T) cannot be cast to []%T", value, new(T))
 			}
 
-			casted := ToEntitySlice(entities)
+			casted := AsEntities(entities)
 
 			for _, handler := range handlers {
 				if err := handler(casted); err != nil {
@@ -62,10 +62,20 @@ func ToInterceptor[T Entity](handlers ...EntityHandler) ent.Interceptor {
 }
 
 // TODO: create slice pool to avoid re allocation ?
-func ToEntitySlice[T Entity](in []T) []Entity {
+func AsEntities[T Entity](in []T) []Entity {
 	var out = make([]Entity, len(in))
 	for i, v := range in {
 		out[i] = v
+	}
+	return out
+}
+
+// Transforms a slice of Entity into a slice of T (where T implements Entity)
+// ⚠️ This conversion often requires a safe type assertion or verification
+func AsTypedEntities[T Entity](in []Entity) []T {
+	var out = make([]T, len(in))
+	for i, v := range in {
+		out[i] = v.(T)
 	}
 	return out
 }

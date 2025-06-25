@@ -1,36 +1,16 @@
-package e2e_test
+package tests
 
 import (
 	"context"
 	"e2e/ent"
 	"fmt"
 	"os"
-	"testing"
 	"time"
 
 	"entgo.io/ent/dialect"
-
-	_ "e2e/ent/runtime"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
-var (
-	client *ent.Client
-)
-
-func TestMain(m *testing.M) {
-	var err error
-	client, err = openAndMigrate()
-	if err != nil {
-		panic(err)
-	}
-
-	exitCode := m.Run()
-	os.Exit(exitCode)
-}
-
-func openAndMigrate() (*ent.Client, error) {
+func OpenAndMigrate() (*ent.Client, error) {
 	url := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=True",
 		os.Getenv("MYSQL_USER"),
 		os.Getenv("MYSQL_PASSWORD"),

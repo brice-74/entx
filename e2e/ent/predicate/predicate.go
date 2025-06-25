@@ -24,5 +24,8 @@ type Employee func(*sql.Selector)
 // Tag is the predicate function for tag builders.
 type Tag func(*sql.Selector)
 
+// TestState is the predicate function for teststate builders.
+type TestState func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

@@ -93,8 +93,8 @@ func (c *Config) isIncluded(t *gen.Type) bool {
 	if nc, ok := c.Nodes[t.Name]; ok && nc != nil {
 		included = nc.Included
 	}
-	if a, ok := t.Annotations[searchableNodeAnnotKey].(Annotation); ok {
-		included = a.NodeConfig.Included
+	if a, ok := t.Annotations[searchableNodeAnnotKey].(map[string]any); ok {
+		included = a["Included"].(bool)
 	}
 	return included
 }
@@ -119,8 +119,8 @@ func (c *Config) computeFieldsInclusion(t *gen.Type) map[string]bool {
 		if _, ok := excMap[f.Name]; ok {
 			allowed = false
 		}
-		if fa, ok := f.Annotations[searchableNodeAnnotKey].(Annotation); ok {
-			allowed = fa.Included
+		if a, ok := f.Annotations[searchableNodeAnnotKey].(map[string]any); ok {
+			allowed = a["Included"].(bool)
 		}
 		res[f.Name] = allowed
 	}

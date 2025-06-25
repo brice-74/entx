@@ -2,7 +2,7 @@ package schema
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -22,8 +22,8 @@ func (User) Fields() []ent.Field {
 		field.String("email").Unique(),
 		field.Int("age").Optional(),
 		field.Bool("is_active").Default(true),
-		field.Time("created_at"),
-		field.Time("updated_at"),
+		field.Time("created_at").Default(time.Now),
+		field.Time("updated_at").Default(time.Now),
 	}
 }
 
@@ -40,18 +40,25 @@ func (User) Policy() ent.Policy {
 		Query: privacy.QueryPolicy{
 			search.QueryPolicy{
 				Enforcer: func(ctx context.Context, qo search.QueryOp) (func(*sql.Selector), error) {
-					fmt.Printf("search.QueryPolicy OnScalarBuild call: %+v\n", ctx.Value("aaa"))
 					return nil, nil
 				},
 			},
-			OtherPolicy{},
+			OtherQueryPolicy{},
+		},
+		Mutation: privacy.MutationPolicy{
+			OtherMutatePolicy{},
 		},
 	}
 }
 
-type OtherPolicy struct{}
+type OtherQueryPolicy struct{}
 
-func (OtherPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
-	fmt.Printf("OtherPolicy call: %+v | %T\n", ctx.Value("aaa"), q)
+func (OtherQueryPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
+	return privacy.Allow
+}
+
+type OtherMutatePolicy struct{}
+
+func (OtherMutatePolicy) EvalMutation(context.Context, ent.Mutation) error {
 	return privacy.Allow
 }

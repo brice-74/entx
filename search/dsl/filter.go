@@ -218,9 +218,9 @@ func buildBasePredicate(
 	case OpNotLike:
 		return func(s *sql.Selector) { s.Where(sql.Not(sql.Like(s.C(field), fmt.Sprintf("%%%v%%", value)))) }, nil
 	case OpIn:
-		return func(s *sql.Selector) { s.Where(sql.In(s.C(field), value)) }, nil
+		return func(s *sql.Selector) { s.Where(sql.In(s.C(field), value...)) }, nil
 	case OpNotIn:
-		return func(s *sql.Selector) { s.Where(sql.Not(sql.In(s.C(field), value))) }, nil
+		return func(s *sql.Selector) { s.Where(sql.Not(sql.In(s.C(field), value...))) }, nil
 	default:
 		return nil, fmt.Errorf("invalid operator %q", op)
 	}

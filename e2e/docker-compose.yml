@@ -26,6 +26,8 @@ services:
       - MYSQL_USER=test
       - MYSQL_PASSWORD=testpwd
       - MYSQL_DATABASE=entx-test
+    ports:
+      - "3306:3306"
     volumes:
       - ./init.test.sql:/docker-entrypoint-initdb.d/init.sql
     networks:

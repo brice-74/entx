@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-# Runs end-to-end tests from ./e2e/tests/<path>, with coverage for all search/* packages except search/extension
+# Runs end-to-end tests from ./e2e/tests/search/<path>, with coverage for all search/* packages except search/extension
 .PHONY: run/test/e2e
 run/test/e2e:
 	-@docker compose -f ./e2e/docker-compose.yml run \
