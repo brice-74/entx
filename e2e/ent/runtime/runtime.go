@@ -23,6 +23,10 @@ func init() {
 	articleDescPublished := articleFields[3].Descriptor()
 	// article.DefaultPublished holds the default value on creation for the published field.
 	article.DefaultPublished = articleDescPublished.Default.(bool)
+	// articleDescCreatedAt is the schema descriptor for created_at field.
+	articleDescCreatedAt := articleFields[4].Descriptor()
+	// article.DefaultCreatedAt holds the default value on creation for the created_at field.
+	article.DefaultCreatedAt = articleDescCreatedAt.Default.(func() time.Time)
 	user.Policy = privacy.NewPolicies(schema.User{})
 	user.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {

@@ -93,7 +93,7 @@ func (q *ArticleQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type ArticleTagClient struct {
   *ent.ArticleTagClient
@@ -123,7 +123,7 @@ func (q *ArticleTagQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type CommentClient struct {
   *ent.CommentClient
@@ -153,7 +153,7 @@ func (q *CommentQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type DepartmentClient struct {
   *ent.DepartmentClient
@@ -183,7 +183,7 @@ func (q *DepartmentQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type EmployeeClient struct {
   *ent.EmployeeClient
@@ -213,7 +213,7 @@ func (q *EmployeeQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type TagClient struct {
   *ent.TagClient
@@ -243,7 +243,7 @@ func (q *TagQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }
 type UserClient struct {
   *ent.UserClient
@@ -273,5 +273,5 @@ func (q *UserQuery) All(ctx context.Context) ([]entx.Entity, error) {
     return nil, err
   }
 
-  return entx.ToEntitySlice(entities), nil
+  return entx.AsEntities(entities), nil
 }

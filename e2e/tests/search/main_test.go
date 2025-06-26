@@ -17,7 +17,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	c, err := tests.OpenAndMigrate()
+	c, err := tests.OpenAndMigrateDB()
 	if err != nil {
 		panic(err)
 	}

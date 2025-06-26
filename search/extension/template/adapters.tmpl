@@ -91,7 +91,7 @@ func (q *{{ .QueryName }}) All(ctx context.Context) ([]{{ $entxImportName }}.Ent
     return nil, err
   }
 
-  return {{ $entxImportName }}.ToEntitySlice(entities), nil
+  return {{ $entxImportName }}.AsEntities(entities), nil
 }
 {{- end }}
 {{- end }}

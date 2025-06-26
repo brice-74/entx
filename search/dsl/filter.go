@@ -11,6 +11,7 @@ import (
 type Operator string
 
 const (
+	OpEmpty        Operator = ""
 	OpEqual        Operator = "="
 	OpNotEqual     Operator = "!="
 	OpGreaterThan  Operator = ">"
@@ -218,9 +219,9 @@ func buildBasePredicate(
 	case OpNotLike:
 		return func(s *sql.Selector) { s.Where(sql.Not(sql.Like(s.C(field), fmt.Sprintf("%%%v%%", value)))) }, nil
 	case OpIn:
-		return func(s *sql.Selector) { s.Where(sql.In(s.C(field), value...)) }, nil
+		return func(s *sql.Selector) { s.Where(sql.In(s.C(field), value.([]any)...)) }, nil
 	case OpNotIn:
-		return func(s *sql.Selector) { s.Where(sql.Not(sql.In(s.C(field), value...))) }, nil
+		return func(s *sql.Selector) { s.Where(sql.Not(sql.In(s.C(field), value.([]any)...))) }, nil
 	default:
 		return nil, fmt.Errorf("invalid operator %q", op)
 	}
@@ -261,6 +262,24 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 		}
 	}
 
+	switch op := f.Operator; op {
+	case OpEmpty:
+	case OpIn, OpNotIn:
+		if !IsSliceOfPrimitiveAnys(f.Value) {
+			return &common.ValidationError{
+				Rule: "OperatorValue",
+				Err:  fmt.Errorf("'%s' operator need slice value of primitive types, got %T", op, f.Value),
+			}
+		}
+	default:
+		if !IsPrimitive(f.Value) {
+			return &common.ValidationError{
+				Rule: "OperatorValue",
+				Err:  fmt.Errorf("'%s' operator need primitive type value, got %T", op, f.Value),
+			}
+		}
+	}
+
 	if maxDepth > 0 && currentDepth > maxDepth {
 		return &common.ValidationError{
 			Rule: "MaxRelationChainDepth",
@@ -286,4 +305,29 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 
 	f.preprocessed = true
 	return nil
+}
+
+func IsPrimitive(val any) bool {
+	switch val.(type) {
+	case bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64,
+		string:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsSliceOfPrimitiveAnys(val any) bool {
+	if slice, ok := val.([]any); ok {
+		for _, v := range slice {
+			if !IsPrimitive(v) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

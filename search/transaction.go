@@ -103,9 +103,6 @@ func (build *TxQueryGroupBuild) Execute(
 			}
 
 			for _, s := range build.Searches {
-				ctx, cancel := common.ContextTimeout(ctx, cfg.QueryTimeout)
-				defer cancel()
-
 				data, count, err := s.ExecFn(ctx, tx)
 				if err != nil {
 					return nil, err

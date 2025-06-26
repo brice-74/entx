@@ -147,8 +147,6 @@ func ExecuteScalarGroupsAsync(
 		case 0:
 		case 1:
 			wg.Go(func() error {
-				ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
-				defer cancel()
 				res, err := ExecuteScalar(ctx, client, group[0])
 				if err != nil {
 					return err
@@ -158,8 +156,6 @@ func ExecuteScalarGroupsAsync(
 			})
 		default:
 			wg.Go(func() error {
-				ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
-				defer cancel()
 				return ExecuteScalarsAsync(ctx, client, response, group...)
 			})
 		}
@@ -181,15 +177,9 @@ func ExecuteScalarGroups(
 		switch len(group) {
 		case 0:
 		case 1:
-			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
-			defer cancel()
-
 			response[group[0].Key], err = ExecuteScalar(ctx, client, group[0])
 			return
 		default:
-			ctx, cancel := ContextTimeout(ctx, cfg.AggregateTimeout)
-			defer cancel()
-
 			return ExecuteScalars(ctx, client, response, group...)
 		}
 	}

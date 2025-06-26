@@ -202,9 +202,6 @@ func (build *QueryOptionsBuild) ExecutePaginatedWithTx(
 		panic("cannot call QueryOptionsBuild.ExecutePaginatedWithTx with nil pagination or without transaction")
 	}
 
-	ctx, cancel := common.ContextTimeout(ctx, cfg.Transaction.Timeout)
-	defer cancel()
-
 	return WithTx(ctx, client, &stdsql.TxOptions{
 		ReadOnly:  true,
 		Isolation: build.TransactionIsolationLevel,
@@ -230,9 +227,6 @@ func (build *QueryOptionsBuild) ExecuteSearchOnly(
 	client entx.Client,
 	cfg *Config,
 ) (*SearchResponse, error) {
-	ctx, cancel := common.ContextTimeout(ctx, cfg.QueryTimeout)
-	defer cancel()
-
 	data, count, err := build.ExecFn(ctx, client)
 	if err != nil {
 		return nil, err
@@ -249,9 +243,6 @@ func (build *QueryOptionsBuild) ExecutePaginate(
 	if !build.IsPaginated() {
 		panic("cannot call QueryOptionsBuild.ExecutePaginate with nil pagination")
 	}
-
-	ctx, cancel := common.ContextTimeout(ctx, cfg.AggregateTimeout)
-	defer cancel()
 
 	raw, err := common.ExecuteScalar(ctx, client, build.Paginate.ToScalarQuery(""))
 	if err != nil {

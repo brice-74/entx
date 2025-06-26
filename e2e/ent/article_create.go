@@ -69,6 +69,14 @@ func (ac *ArticleCreate) SetCreatedAt(t time.Time) *ArticleCreate {
 	return ac
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (ac *ArticleCreate) SetNillableCreatedAt(t *time.Time) *ArticleCreate {
+	if t != nil {
+		ac.SetCreatedAt(*t)
+	}
+	return ac
+}
+
 // SetAuthorID sets the "author" edge to the User entity by ID.
 func (ac *ArticleCreate) SetAuthorID(id int) *ArticleCreate {
 	ac.mutation.SetAuthorID(id)
@@ -148,6 +156,10 @@ func (ac *ArticleCreate) defaults() {
 	if _, ok := ac.mutation.Published(); !ok {
 		v := article.DefaultPublished
 		ac.mutation.SetPublished(v)
+	}
+	if _, ok := ac.mutation.CreatedAt(); !ok {
+		v := article.DefaultCreatedAt()
+		ac.mutation.SetCreatedAt(v)
 	}
 }
 

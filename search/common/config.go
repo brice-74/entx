@@ -71,18 +71,14 @@ var DefaultConf = *defaultConf.BindDeeply()
 type TransactionConfig struct {
 	IsolationLevel      sql.IsolationLevel
 	EnablePaginateQuery bool
-	Timeout             time.Duration
 	// Client input permissions
 	AllowClientIsolationLevel bool
 }
 
 type Config struct {
-	Dialect     string
-	Transaction TransactionConfig
-	// Timeouts
-	RequestTimeout   time.Duration // includes a global call to an Execute method
-	QueryTimeout     time.Duration // only on search queries
-	AggregateTimeout time.Duration // includes pagination counts and aggregations
+	Dialect        string
+	Transaction    TransactionConfig
+	RequestTimeout time.Duration
 	// Batch sizing
 	ScalarQueriesChunkSize       int
 	MaxParallelWorkersPerRequest int

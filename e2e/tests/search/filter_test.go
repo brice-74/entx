@@ -4,6 +4,7 @@ import (
 	"context"
 	"e2e/ent"
 	"e2e/ent/entx"
+	"fmt"
 	"testing"
 
 	entxstd "github.com/brice-74/entx"
@@ -14,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSearchFilter(t *testing.T) {
+func TestFilter(t *testing.T) {
 	t.Run("PanicPreprocessed", func(t *testing.T) {
 		require.Panics(t, func() { (&dsl.Filter{}).Predicate(nil) })
 	})
@@ -28,7 +29,7 @@ type filterOperatorsTest struct {
 	requireContent func(*testing.T, []*ent.User)
 }
 
-func TestSearchFilterOperators(t *testing.T) {
+func TestFilterOperators(t *testing.T) {
 	tests := []filterOperatorsTest{
 		{
 			field:         "age",
@@ -90,7 +91,7 @@ func TestSearchFilterOperators(t *testing.T) {
 			expectedCount: 2,
 			requireContent: func(t *testing.T, users []*ent.User) {
 				for _, u := range users {
-					require.Less(t, u.Age, 30)
+					require.LessOrEqual(t, u.Age, 30)
 				}
 			},
 		},
@@ -117,33 +118,33 @@ func TestSearchFilterOperators(t *testing.T) {
 		{
 			field:         "age",
 			operator:      dsl.OpIn,
-			value:         []int{20, 30},
+			value:         []any{20, 30},
 			expectedCount: 2,
 			requireContent: func(t *testing.T, users []*ent.User) {
-				found := []int{}
+				found := make([]any, len(users))
 				for i, u := range users {
 					found[i] = u.Age
 				}
-				require.Subset(t, found, []int{20, 30})
+				require.Subset(t, found, []any{20, 30})
 			},
 		},
 		{
 			field:         "age",
 			operator:      dsl.OpNotIn,
-			value:         []int{20, 30},
+			value:         []any{20, 30},
 			expectedCount: 1,
 			requireContent: func(t *testing.T, users []*ent.User) {
-				found := []int{}
+				found := make([]any, len(users))
 				for i, u := range users {
 					found[i] = u.Age
 				}
-				require.NotSubset(t, found, []int{20, 30})
+				require.NotSubset(t, found, []any{20, 30})
 			},
 		},
 	}
 
 	for _, test := range tests {
-		t.Run(string(test.operator), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Success(%s)", test.operator), func(t *testing.T) {
 			q := search.TargetedQuery{
 				From: "User",
 				QueryOptions: search.QueryOptions{
@@ -169,4 +170,166 @@ func TestSearchFilterOperators(t *testing.T) {
 			test.requireContent(t, entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity)))
 		})
 	}
+}
+
+func TestFilterCondition(t *testing.T) {
+	t.Run("SuccessOr", func(t *testing.T) {
+		q := search.TargetedQuery{
+			From: "User",
+			QueryOptions: search.QueryOptions{
+				Filters: dsl.Filters{
+					{
+						Or: dsl.Filters{
+							{
+								Field:    "age",
+								Operator: "=",
+								Value:    30,
+							},
+							{
+								Field:    "is_active",
+								Operator: "=",
+								Value:    false,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		res, err := q.Execute(
+			context.Background(),
+			client,
+			entx.Graph,
+			&common.DefaultConf,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, 2, res.Meta.Count)
+		for i, u := range entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity)) {
+			if u.IsActive != false && u.Age != 30 {
+				t.Fatalf("unexpected user at index %d: IsActive=%v, Age=%d", i, u.IsActive, u.Age)
+			}
+		}
+	})
+
+	t.Run("SuccessAnd", func(t *testing.T) {
+		q := search.TargetedQuery{
+			From: "User",
+			QueryOptions: search.QueryOptions{
+				Filters: dsl.Filters{
+					{
+						And: dsl.Filters{
+							{
+								Field:    "age",
+								Operator: "=",
+								Value:    40,
+							},
+							{
+								Field:    "is_active",
+								Operator: "=",
+								Value:    false,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		res, err := q.Execute(
+			context.Background(),
+			client,
+			entx.Graph,
+			&common.DefaultConf,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, 1, res.Meta.Count)
+		u := entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity))[0]
+		if u.IsActive != false || u.Age != 40 {
+			t.Fatalf("unexpected user: IsActive=%v, Age=%d", u.IsActive, u.Age)
+		}
+	})
+
+	t.Run("SuccessNot", func(t *testing.T) {
+		q := search.TargetedQuery{
+			From: "User",
+			QueryOptions: search.QueryOptions{
+				Filters: dsl.Filters{
+					{
+						Not: &dsl.Filter{
+							Field:    "is_active",
+							Operator: "=",
+							Value:    true,
+						},
+					},
+				},
+			},
+		}
+
+		res, err := q.Execute(
+			context.Background(),
+			client,
+			entx.Graph,
+			&common.DefaultConf,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, 1, res.Meta.Count)
+		u := entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity))[0]
+		if u.IsActive != false {
+			t.Fatalf("unexpected user: IsActive=%v", u.IsActive)
+		}
+	})
+
+	t.Run("SuccessNested", func(t *testing.T) {
+		q := search.TargetedQuery{
+			From: "User",
+			QueryOptions: search.QueryOptions{
+				Filters: dsl.Filters{
+					{
+						Or: dsl.Filters{
+							{
+								And: dsl.Filters{
+									{
+										Field:    "age",
+										Operator: "=",
+										Value:    40,
+									},
+									{
+										Field:    "is_active",
+										Operator: "=",
+										Value:    false,
+									},
+								},
+							},
+							{
+								Field:    "age",
+								Operator: "=",
+								Value:    20,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		res, err := q.Execute(
+			context.Background(),
+			client,
+			entx.Graph,
+			&common.DefaultConf,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, 2, res.Meta.Count)
+		for i, u := range entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity)) {
+			if !((u.Age == 40 && u.IsActive == false) || u.Age == 20) {
+				t.Fatalf("unexpected user at index %d: IsActive=%v, Age=%d", i, u.IsActive, u.Age)
+			}
+		}
+	})
+}
+
+func TestFilterRelations(t *testing.T) {
+
 }

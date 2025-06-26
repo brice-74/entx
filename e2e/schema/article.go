@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -16,7 +18,7 @@ func (Article) Fields() []ent.Field {
 		field.String("title"),
 		field.String("content").Optional(),
 		field.Bool("published").Default(false),
-		field.Time("created_at"),
+		field.Time("created_at").Default(time.Now),
 	}
 }
 
