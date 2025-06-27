@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -12,8 +14,9 @@ type Comment struct {
 
 func (Comment) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("id").Unique(),
 		field.String("body"),
-		field.Time("created_at"),
+		field.Time("created_at").Default(time.Now),
 		field.Int("user_id"),
 		field.Int("article_id"),
 	}

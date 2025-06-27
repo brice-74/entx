@@ -9,7 +9,7 @@ run/test/e2e:
 		entx-test-svc sh -c " \
 			cd e2e && \
 			go test -p 1 -v -vet=off \
-				-run \"$(func)\" ./tests/$(path) \
+				-run \"$(func)\" ./tests/$(if $(path),$(path),...) \
 				-coverpkg=$$( \
 					go list github.com/brice-74/entx/... | grep -v '/e2e' | grep -v 'extension$$' | paste -sd "," \
 				-) \

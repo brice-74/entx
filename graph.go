@@ -18,6 +18,7 @@ type (
 	}
 
 	Client interface {
+		Debug() Client
 		GetEntityClient(Node) (EntityClient, error)
 		MustGetEntityClient(Node) EntityClient
 		QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error)

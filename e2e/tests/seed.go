@@ -3,107 +3,137 @@ package tests
 import (
 	"context"
 	"e2e/ent"
-	"e2e/ent/teststate"
-	"fmt"
+	"time"
 )
 
-func EnsureBaseSeed(client *ent.Client) error {
-	if err := FlushDB(client); err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	alreadySeeded, err := client.TestState.
-		Query().
-		Where(teststate.Key("seed_base"), teststate.Done(true)).
-		Exist(ctx)
-	if err != nil {
-		return fmt.Errorf("check seed status: %w", err)
-	}
-
-	if alreadySeeded {
-		return nil
-	}
-
-	if err := SeedBaseData(ctx, client); err != nil {
-		return fmt.Errorf("seed error: %w", err)
-	}
-
-	return client.TestState.
-		Create().
-		SetKey("seed_base").
-		SetDone(true).
-		Exec(ctx)
-}
-
 func SeedBaseData(ctx context.Context, client *ent.Client) error {
-	users, err := client.User.CreateBulk(
-		client.User.Create().
-			SetEmail("user1@example.com").
-			SetName("User One").
-			SetAge(20),
-		client.User.Create().
-			SetEmail("user2@example.com").
-			SetName("User Two").
-			SetAge(30),
-		client.User.Create().
-			SetEmail("user3@example.com").
-			SetName("User Three").
-			SetAge(40).
-			SetIsActive(false),
-	).Save(ctx)
-	if err != nil {
+	if err := FlushDB(ctx, client); err != nil {
 		return err
 	}
 
-	articles, err := client.Article.CreateBulk(
-		client.Article.Create().
-			SetTitle("Go Concurrency Patterns").
-			SetContent("This article explores common concurrency patterns in Go, including channels and goroutines.").
-			SetPublished(true).
-			SetUserID(users[0].ID),
-		client.Article.Create().
-			SetTitle("Understanding SQL Joins").
-			SetContent("Learn how different types of SQL joins work with real-world examples.").
-			SetPublished(true).
-			SetUserID(users[0].ID),
-		client.Article.Create().
-			SetTitle("Docker for Developers").
-			SetContent("A beginner-friendly guide to using Docker for local development and deployments.").
-			SetPublished(true).
-			SetUserID(users[2].ID),
-	).Save(ctx)
-	if err != nil {
+	if err := WithTx(ctx, client, func(ctx context.Context, client *ent.Client) error {
+		if err := client.User.CreateBulk(
+			client.User.Create().
+				SetID(1).
+				SetEmail("user1@example.com").
+				SetName("User One").
+				SetAge(20),
+			client.User.Create().
+				SetID(2).
+				SetEmail("user2@example.com").
+				SetName("User Two").
+				SetAge(30),
+			client.User.Create().
+				SetID(3).
+				SetEmail("user3@example.com").
+				SetName("User Three").
+				SetAge(40).
+				SetIsActive(false),
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.Article.CreateBulk(
+			client.Article.Create().
+				SetID(1).
+				SetTitle("Go Concurrency Patterns").
+				SetContent("This article explores common concurrency patterns in Go, including channels and goroutines.").
+				SetPublished(true).
+				SetUserID(1),
+			client.Article.Create().
+				SetID(2).
+				SetTitle("Understanding SQL Joins").
+				SetContent("Learn how different types of SQL joins work with real-world examples.").
+				SetPublished(true).
+				SetUserID(1),
+			client.Article.Create().
+				SetID(3).
+				SetTitle("Docker for Developers").
+				SetContent("A beginner-friendly guide to using Docker for local development and deployments.").
+				SetPublished(true).
+				SetUserID(3),
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.Comment.CreateBulk(
+			client.Comment.Create().
+				SetID(1).
+				SetBody("Very good article, I learned a lot about goroutines.").
+				SetUserID(2).    // User 2
+				SetArticleID(1), // Article 1
+			client.Comment.Create().
+				SetID(2).
+				SetBody("Thanks for this clear article on SQL joins!").
+				SetCreatedAt(time.Now()).
+				SetUserID(1).    // User 1
+				SetArticleID(2), // Article 2
+			client.Comment.Create().
+				SetID(3).
+				SetBody("Great explanation, I can't wait to see what happens next.").
+				SetCreatedAt(time.Now()).
+				SetUserID(3).    // User 3
+				SetArticleID(2), // Article 2
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.Tag.CreateBulk(
+			client.Tag.Create().SetID(1).SetName("Go"),
+			client.Tag.Create().SetID(2).SetName("SQL"),
+			client.Tag.Create().SetID(3).SetName("DevOps"),
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.ArticleTag.CreateBulk(
+			client.ArticleTag.Create().
+				SetArticleID(1). // Article 1
+				SetTagID(1),     // Tag Go
+			client.ArticleTag.Create().
+				SetArticleID(2). // Article 2
+				SetTagID(2),     // Tag SQL
+			client.ArticleTag.Create().
+				SetArticleID(3). // Article 3
+				SetTagID(3),     // Tag DevOps
+			client.ArticleTag.Create().
+				SetArticleID(3). // Article 3
+				SetTagID(1),     // Tag Go
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.Department.CreateBulk(
+			client.Department.Create().SetID(1).SetName("DG"),
+			client.Department.Create().SetID(2).SetName("DRH"),
+			client.Department.Create().SetID(3).SetName("DSI"),
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		if err := client.Employee.CreateBulk(
+			client.Employee.Create().
+				SetID(1).
+				SetUserID(1).       // User 1
+				SetDepartmentID(1), // Department DG
+			client.Employee.Create().
+				SetID(2).
+				SetUserID(2).       // User 2
+				SetDepartmentID(2). // Department DRH
+				SetManagerID(1),
+			client.Employee.Create().
+				SetID(3).
+				SetUserID(3).       // User 3
+				SetDepartmentID(3). // Department DSI
+				SetManagerID(1),
+		).Exec(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
 		return err
 	}
 
-	tags, err := client.Tag.CreateBulk(
-		client.Tag.Create().SetName("Go"),
-		client.Tag.Create().SetName("SQL"),
-		client.Tag.Create().SetName("DevOps"),
-	).Save(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.ArticleTag.CreateBulk(
-		client.ArticleTag.Create().
-			SetArticleID(articles[0].ID).
-			SetTagID(tags[0].ID),
-		client.ArticleTag.Create().
-			SetArticleID(articles[1].ID).
-			SetTagID(tags[1].ID),
-		client.ArticleTag.Create().
-			SetArticleID(articles[2].ID).
-			SetTagID(tags[2].ID),
-		client.ArticleTag.Create().
-			SetArticleID(articles[2].ID).
-			SetTagID(tags[0].ID),
-	).Save(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ResetAutoIncrement(ctx, client)
 }

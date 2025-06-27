@@ -17,7 +17,6 @@ import (
 	"e2e/ent/department"
 	"e2e/ent/employee"
 	"e2e/ent/tag"
-	"e2e/ent/teststate"
 	"e2e/ent/user"
 
 	"entgo.io/ent"
@@ -45,8 +44,6 @@ type Client struct {
 	Employee *EmployeeClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
-	// TestState is the client for interacting with the TestState builders.
-	TestState *TestStateClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -66,7 +63,6 @@ func (c *Client) init() {
 	c.Department = NewDepartmentClient(c.config)
 	c.Employee = NewEmployeeClient(c.config)
 	c.Tag = NewTagClient(c.config)
-	c.TestState = NewTestStateClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -166,7 +162,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Department: NewDepartmentClient(cfg),
 		Employee:   NewEmployeeClient(cfg),
 		Tag:        NewTagClient(cfg),
-		TestState:  NewTestStateClient(cfg),
 		User:       NewUserClient(cfg),
 	}, nil
 }
@@ -193,7 +188,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Department: NewDepartmentClient(cfg),
 		Employee:   NewEmployeeClient(cfg),
 		Tag:        NewTagClient(cfg),
-		TestState:  NewTestStateClient(cfg),
 		User:       NewUserClient(cfg),
 	}, nil
 }
@@ -224,8 +218,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Article, c.ArticleTag, c.Comment, c.Department, c.Employee, c.Tag,
-		c.TestState, c.User,
+		c.Article, c.ArticleTag, c.Comment, c.Department, c.Employee, c.Tag, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -235,8 +228,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Article, c.ArticleTag, c.Comment, c.Department, c.Employee, c.Tag,
-		c.TestState, c.User,
+		c.Article, c.ArticleTag, c.Comment, c.Department, c.Employee, c.Tag, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -257,8 +249,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Employee.mutate(ctx, m)
 	case *TagMutation:
 		return c.Tag.mutate(ctx, m)
-	case *TestStateMutation:
-		return c.TestState.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -1255,139 +1245,6 @@ func (c *TagClient) mutate(ctx context.Context, m *TagMutation) (Value, error) {
 	}
 }
 
-// TestStateClient is a client for the TestState schema.
-type TestStateClient struct {
-	config
-}
-
-// NewTestStateClient returns a client for the TestState from the given config.
-func NewTestStateClient(c config) *TestStateClient {
-	return &TestStateClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `teststate.Hooks(f(g(h())))`.
-func (c *TestStateClient) Use(hooks ...Hook) {
-	c.hooks.TestState = append(c.hooks.TestState, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `teststate.Intercept(f(g(h())))`.
-func (c *TestStateClient) Intercept(interceptors ...Interceptor) {
-	c.inters.TestState = append(c.inters.TestState, interceptors...)
-}
-
-// Create returns a builder for creating a TestState entity.
-func (c *TestStateClient) Create() *TestStateCreate {
-	mutation := newTestStateMutation(c.config, OpCreate)
-	return &TestStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of TestState entities.
-func (c *TestStateClient) CreateBulk(builders ...*TestStateCreate) *TestStateCreateBulk {
-	return &TestStateCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *TestStateClient) MapCreateBulk(slice any, setFunc func(*TestStateCreate, int)) *TestStateCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &TestStateCreateBulk{err: fmt.Errorf("calling to TestStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*TestStateCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &TestStateCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for TestState.
-func (c *TestStateClient) Update() *TestStateUpdate {
-	mutation := newTestStateMutation(c.config, OpUpdate)
-	return &TestStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *TestStateClient) UpdateOne(ts *TestState) *TestStateUpdateOne {
-	mutation := newTestStateMutation(c.config, OpUpdateOne, withTestState(ts))
-	return &TestStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *TestStateClient) UpdateOneID(id int) *TestStateUpdateOne {
-	mutation := newTestStateMutation(c.config, OpUpdateOne, withTestStateID(id))
-	return &TestStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for TestState.
-func (c *TestStateClient) Delete() *TestStateDelete {
-	mutation := newTestStateMutation(c.config, OpDelete)
-	return &TestStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *TestStateClient) DeleteOne(ts *TestState) *TestStateDeleteOne {
-	return c.DeleteOneID(ts.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *TestStateClient) DeleteOneID(id int) *TestStateDeleteOne {
-	builder := c.Delete().Where(teststate.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &TestStateDeleteOne{builder}
-}
-
-// Query returns a query builder for TestState.
-func (c *TestStateClient) Query() *TestStateQuery {
-	return &TestStateQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeTestState},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a TestState entity by its id.
-func (c *TestStateClient) Get(ctx context.Context, id int) (*TestState, error) {
-	return c.Query().Where(teststate.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *TestStateClient) GetX(ctx context.Context, id int) *TestState {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *TestStateClient) Hooks() []Hook {
-	return c.hooks.TestState
-}
-
-// Interceptors returns the client interceptors.
-func (c *TestStateClient) Interceptors() []Interceptor {
-	return c.inters.TestState
-}
-
-func (c *TestStateClient) mutate(ctx context.Context, m *TestStateMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&TestStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&TestStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&TestStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&TestStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown TestState mutation op: %q", m.Op())
-	}
-}
-
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -1573,12 +1430,10 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Article, ArticleTag, Comment, Department, Employee, Tag, TestState,
-		User []ent.Hook
+		Article, ArticleTag, Comment, Department, Employee, Tag, User []ent.Hook
 	}
 	inters struct {
-		Article, ArticleTag, Comment, Department, Employee, Tag, TestState,
-		User []ent.Interceptor
+		Article, ArticleTag, Comment, Department, Employee, Tag, User []ent.Interceptor
 	}
 )
 

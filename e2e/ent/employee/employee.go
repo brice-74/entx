@@ -3,6 +3,8 @@
 package employee
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -72,6 +74,11 @@ func ValidColumn(column string) bool {
 	}
 	return false
 }
+
+var (
+	// DefaultHireDate holds the default value on creation for the "hire_date" field.
+	DefaultHireDate func() time.Time
+)
 
 // OrderOption defines the ordering options for the Employee queries.
 type OrderOption func(*sql.Selector)

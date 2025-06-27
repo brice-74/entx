@@ -26,8 +26,6 @@ type Tx struct {
 	Employee *EmployeeClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
-	// TestState is the client for interacting with the TestState builders.
-	TestState *TestStateClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -167,7 +165,6 @@ func (tx *Tx) init() {
 	tx.Department = NewDepartmentClient(tx.config)
 	tx.Employee = NewEmployeeClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
-	tx.TestState = NewTestStateClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

@@ -1,6 +1,7 @@
 package e2e_search_test
 
 import (
+	"context"
 	"log"
 	"os"
 	"testing"
@@ -25,7 +26,7 @@ func TestMain(m *testing.M) {
 
 	client = entx.NewClient(c)
 
-	if err := tests.EnsureBaseSeed(c); err != nil {
+	if err := tests.SeedBaseData(context.Background(), c); err != nil {
 		log.Fatalf("failed to seed data: %v", err)
 	}
 

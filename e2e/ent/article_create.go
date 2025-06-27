@@ -77,6 +77,12 @@ func (ac *ArticleCreate) SetNillableCreatedAt(t *time.Time) *ArticleCreate {
 	return ac
 }
 
+// SetID sets the "id" field.
+func (ac *ArticleCreate) SetID(i int) *ArticleCreate {
+	ac.mutation.SetID(i)
+	return ac
+}
+
 // SetAuthorID sets the "author" edge to the User entity by ID.
 func (ac *ArticleCreate) SetAuthorID(id int) *ArticleCreate {
 	ac.mutation.SetAuthorID(id)
@@ -194,8 +200,10 @@ func (ac *ArticleCreate) sqlSave(ctx context.Context) (*Article, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int(id)
+	}
 	ac.mutation.id = &_node.ID
 	ac.mutation.done = true
 	return _node, nil
@@ -206,6 +214,10 @@ func (ac *ArticleCreate) createSpec() (*Article, *sqlgraph.CreateSpec) {
 		_node = &Article{config: ac.config}
 		_spec = sqlgraph.NewCreateSpec(article.Table, sqlgraph.NewFieldSpec(article.FieldID, field.TypeInt))
 	)
+	if id, ok := ac.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := ac.mutation.Title(); ok {
 		_spec.SetField(article.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -319,7 +331,7 @@ func (acb *ArticleCreateBulk) Save(ctx context.Context) ([]*Article, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int(id)
 				}

@@ -26,6 +26,12 @@ func (dc *DepartmentCreate) SetName(s string) *DepartmentCreate {
 	return dc
 }
 
+// SetID sets the "id" field.
+func (dc *DepartmentCreate) SetID(i int) *DepartmentCreate {
+	dc.mutation.SetID(i)
+	return dc
+}
+
 // AddEmployeeIDs adds the "employees" edge to the Employee entity by IDs.
 func (dc *DepartmentCreate) AddEmployeeIDs(ids ...int) *DepartmentCreate {
 	dc.mutation.AddEmployeeIDs(ids...)
@@ -92,8 +98,10 @@ func (dc *DepartmentCreate) sqlSave(ctx context.Context) (*Department, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int(id)
+	}
 	dc.mutation.id = &_node.ID
 	dc.mutation.done = true
 	return _node, nil
@@ -104,6 +112,10 @@ func (dc *DepartmentCreate) createSpec() (*Department, *sqlgraph.CreateSpec) {
 		_node = &Department{config: dc.config}
 		_spec = sqlgraph.NewCreateSpec(department.Table, sqlgraph.NewFieldSpec(department.FieldID, field.TypeInt))
 	)
+	if id, ok := dc.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := dc.mutation.Name(); ok {
 		_spec.SetField(department.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -171,7 +183,7 @@ func (dcb *DepartmentCreateBulk) Save(ctx context.Context) ([]*Department, error
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int(id)
 				}

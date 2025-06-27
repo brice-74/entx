@@ -28,6 +28,14 @@ func (ec *EmployeeCreate) SetHireDate(t time.Time) *EmployeeCreate {
 	return ec
 }
 
+// SetNillableHireDate sets the "hire_date" field if the given value is not nil.
+func (ec *EmployeeCreate) SetNillableHireDate(t *time.Time) *EmployeeCreate {
+	if t != nil {
+		ec.SetHireDate(*t)
+	}
+	return ec
+}
+
 // SetManagerID sets the "manager_id" field.
 func (ec *EmployeeCreate) SetManagerID(i int) *EmployeeCreate {
 	ec.mutation.SetManagerID(i)
@@ -51,6 +59,12 @@ func (ec *EmployeeCreate) SetUserID(i int) *EmployeeCreate {
 // SetDepartmentID sets the "department_id" field.
 func (ec *EmployeeCreate) SetDepartmentID(i int) *EmployeeCreate {
 	ec.mutation.SetDepartmentID(i)
+	return ec
+}
+
+// SetID sets the "id" field.
+func (ec *EmployeeCreate) SetID(i int) *EmployeeCreate {
+	ec.mutation.SetID(i)
 	return ec
 }
 
@@ -91,6 +105,7 @@ func (ec *EmployeeCreate) Mutation() *EmployeeMutation {
 
 // Save creates the Employee in the database.
 func (ec *EmployeeCreate) Save(ctx context.Context) (*Employee, error) {
+	ec.defaults()
 	return withHooks(ctx, ec.sqlSave, ec.mutation, ec.hooks)
 }
 
@@ -113,6 +128,14 @@ func (ec *EmployeeCreate) Exec(ctx context.Context) error {
 func (ec *EmployeeCreate) ExecX(ctx context.Context) {
 	if err := ec.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (ec *EmployeeCreate) defaults() {
+	if _, ok := ec.mutation.HireDate(); !ok {
+		v := employee.DefaultHireDate()
+		ec.mutation.SetHireDate(v)
 	}
 }
 
@@ -147,8 +170,10 @@ func (ec *EmployeeCreate) sqlSave(ctx context.Context) (*Employee, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int(id)
+	}
 	ec.mutation.id = &_node.ID
 	ec.mutation.done = true
 	return _node, nil
@@ -159,6 +184,10 @@ func (ec *EmployeeCreate) createSpec() (*Employee, *sqlgraph.CreateSpec) {
 		_node = &Employee{config: ec.config}
 		_spec = sqlgraph.NewCreateSpec(employee.Table, sqlgraph.NewFieldSpec(employee.FieldID, field.TypeInt))
 	)
+	if id, ok := ec.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := ec.mutation.HireDate(); ok {
 		_spec.SetField(employee.FieldHireDate, field.TypeTime, value)
 		_node.HireDate = value
@@ -251,6 +280,7 @@ func (ecb *EmployeeCreateBulk) Save(ctx context.Context) ([]*Employee, error) {
 	for i := range ecb.builders {
 		func(i int, root context.Context) {
 			builder := ecb.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*EmployeeMutation)
 				if !ok {
@@ -277,7 +307,7 @@ func (ecb *EmployeeCreateBulk) Save(ctx context.Context) ([]*Employee, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int(id)
 				}

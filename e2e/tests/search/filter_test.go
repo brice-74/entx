@@ -21,16 +21,14 @@ func TestFilter(t *testing.T) {
 	})
 }
 
-type filterOperatorsTest struct {
-	field          string
-	operator       dsl.Operator
-	value          any
-	expectedCount  int
-	requireContent func(*testing.T, []*ent.User)
-}
-
 func TestFilterOperators(t *testing.T) {
-	tests := []filterOperatorsTest{
+	tests := []struct {
+		field          string
+		operator       dsl.Operator
+		value          any
+		expectedCount  int
+		requireContent func(*testing.T, []*ent.User)
+	}{
 		{
 			field:         "age",
 			operator:      dsl.OpEqual,
@@ -143,16 +141,16 @@ func TestFilterOperators(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("Success(%s)", test.operator), func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("Success(%s)", tt.operator), func(t *testing.T) {
 			q := search.TargetedQuery{
 				From: "User",
 				QueryOptions: search.QueryOptions{
 					Filters: dsl.Filters{
 						{
-							Field:    test.field,
-							Operator: test.operator,
-							Value:    test.value,
+							Field:    tt.field,
+							Operator: tt.operator,
+							Value:    tt.value,
 						},
 					},
 				},
@@ -166,8 +164,8 @@ func TestFilterOperators(t *testing.T) {
 			)
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedCount, res.Meta.Count)
-			test.requireContent(t, entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity)))
+			require.Equal(t, tt.expectedCount, res.Meta.Count)
+			tt.requireContent(t, entxstd.AsTypedEntities[*ent.User](res.Data.([]entxstd.Entity)))
 		})
 	}
 }
@@ -330,6 +328,119 @@ func TestFilterCondition(t *testing.T) {
 	})
 }
 
-func TestFilterRelations(t *testing.T) {
+func TestFilterRelationtypes(t *testing.T) {
+	tests := []struct {
+		name  string
+		query search.TargetedQuery
+	}{
+		// ---------------------------
+		// 🟦 One-to-One (O2O)
+		// ---------------------------
+		{
+			name: "EmployeeO2OWithUserNameFilter",
+			query: q("Employee", filter(
+				relation("user", field("name", "=", "User One")),
+			)),
+		},
 
+		// ---------------------------
+		// 🟦 One-to-Many (O2M)
+		// ---------------------------
+		{
+			name: "UserO2MWithArticleTitleFilter",
+			query: q("User", filter(
+				relation("articles", field("title", "=", "Go Concurrency Patterns")),
+			)),
+		},
+		{
+			name: "ArticleO2MWithCommentBodyContains",
+			query: q("Article", filter(
+				relation("comments", field("body", "LIKE", "%goroutines%")),
+			)),
+		},
+
+		// ---------------------------
+		// 🟦 Many-to-One (M2O)
+		// ---------------------------
+		{
+			name: "CommentM2OWithUserNameFilter",
+			query: q("Comment", filter(
+				relation("user", field("name", "=", "User Two")),
+			)),
+		},
+		{
+			name: "EmployeeM2OWithDepartmentNameFilter",
+			query: q("Employee", filter(
+				relation("department", field("name", "=", "DSI")),
+			)),
+		},
+
+		// ---------------------------
+		// 🟦 Many-to-Many (M2M)
+		// ---------------------------
+		{
+			name: "ArticleM2MWithTagGo",
+			query: q("Article", filter(
+				relation("tags", field("name", "=", "Go")),
+			)),
+		},
+		{
+			name: "ArticleM2MWithTagsGoAndDevOps",
+			query: q("Article", filter(
+				relation("tags", and(
+					field("name", "=", "Go"),
+					field("name", "=", "DevOps"),
+				)),
+			)),
+		},
+
+		// ---------------------------
+		// 🟦 Self-relation (Employee.manager / Employee.reports)
+		// ---------------------------
+		{
+			name: "EmployeeSelfWithManagerUserName",
+			query: q("Employee", filter(
+				relation("manager.user", field("name", "=", "User Three")),
+			)),
+		},
+		{
+			name: "EmployeeSelfWithReportNamedUserOne",
+			query: q("Employee", filter(
+				relation("reports.user", field("name", "=", "User One")),
+			)),
+		},
+	}
+
+}
+
+func q(from string, f dsl.Filters) search.TargetedQuery {
+	return search.TargetedQuery{
+		From: from,
+		QueryOptions: search.QueryOptions{
+			Filters: f,
+		},
+	}
+}
+
+func filter(fs ...*dsl.Filter) dsl.Filters {
+	return dsl.Filters(fs)
+}
+
+func relation(path string, f *dsl.Filter) *dsl.Filter {
+	return &dsl.Filter{
+		Relation: path,
+		And:      dsl.Filters{f},
+	}
+}
+
+func field(name string, op dsl.Operator, val any) *dsl.Filter {
+	return &dsl.Filter{
+		Field:    name,
+		Operator: op,
+		Value:    val,
+	}
+}
+
+func and(fs ...*dsl.Filter) dsl.Filters {
+	return dsl.Filters(fs)
 }

@@ -5,6 +5,8 @@ package runtime
 import (
 	"context"
 	"e2e/ent/article"
+	"e2e/ent/comment"
+	"e2e/ent/employee"
 	"e2e/ent/user"
 	"e2e/schema"
 	"time"
@@ -20,13 +22,25 @@ func init() {
 	articleFields := schema.Article{}.Fields()
 	_ = articleFields
 	// articleDescPublished is the schema descriptor for published field.
-	articleDescPublished := articleFields[3].Descriptor()
+	articleDescPublished := articleFields[4].Descriptor()
 	// article.DefaultPublished holds the default value on creation for the published field.
 	article.DefaultPublished = articleDescPublished.Default.(bool)
 	// articleDescCreatedAt is the schema descriptor for created_at field.
-	articleDescCreatedAt := articleFields[4].Descriptor()
+	articleDescCreatedAt := articleFields[5].Descriptor()
 	// article.DefaultCreatedAt holds the default value on creation for the created_at field.
 	article.DefaultCreatedAt = articleDescCreatedAt.Default.(func() time.Time)
+	commentFields := schema.Comment{}.Fields()
+	_ = commentFields
+	// commentDescCreatedAt is the schema descriptor for created_at field.
+	commentDescCreatedAt := commentFields[2].Descriptor()
+	// comment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	comment.DefaultCreatedAt = commentDescCreatedAt.Default.(func() time.Time)
+	employeeFields := schema.Employee{}.Fields()
+	_ = employeeFields
+	// employeeDescHireDate is the schema descriptor for hire_date field.
+	employeeDescHireDate := employeeFields[1].Descriptor()
+	// employee.DefaultHireDate holds the default value on creation for the hire_date field.
+	employee.DefaultHireDate = employeeDescHireDate.Default.(func() time.Time)
 	user.Policy = privacy.NewPolicies(schema.User{})
 	user.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -39,15 +53,15 @@ func init() {
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescIsActive is the schema descriptor for is_active field.
-	userDescIsActive := userFields[3].Descriptor()
+	userDescIsActive := userFields[4].Descriptor()
 	// user.DefaultIsActive holds the default value on creation for the is_active field.
 	user.DefaultIsActive = userDescIsActive.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[4].Descriptor()
+	userDescCreatedAt := userFields[5].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[5].Descriptor()
+	userDescUpdatedAt := userFields[6].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 }

@@ -14,6 +14,7 @@ type Article struct {
 
 func (Article) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("id").Unique(),
 		field.Int("user_id"),
 		field.String("title"),
 		field.String("content").Optional(),

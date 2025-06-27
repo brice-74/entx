@@ -34,6 +34,14 @@ func (cc *CommentCreate) SetCreatedAt(t time.Time) *CommentCreate {
 	return cc
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (cc *CommentCreate) SetNillableCreatedAt(t *time.Time) *CommentCreate {
+	if t != nil {
+		cc.SetCreatedAt(*t)
+	}
+	return cc
+}
+
 // SetUserID sets the "user_id" field.
 func (cc *CommentCreate) SetUserID(i int) *CommentCreate {
 	cc.mutation.SetUserID(i)
@@ -43,6 +51,12 @@ func (cc *CommentCreate) SetUserID(i int) *CommentCreate {
 // SetArticleID sets the "article_id" field.
 func (cc *CommentCreate) SetArticleID(i int) *CommentCreate {
 	cc.mutation.SetArticleID(i)
+	return cc
+}
+
+// SetID sets the "id" field.
+func (cc *CommentCreate) SetID(i int) *CommentCreate {
+	cc.mutation.SetID(i)
 	return cc
 }
 
@@ -63,6 +77,7 @@ func (cc *CommentCreate) Mutation() *CommentMutation {
 
 // Save creates the Comment in the database.
 func (cc *CommentCreate) Save(ctx context.Context) (*Comment, error) {
+	cc.defaults()
 	return withHooks(ctx, cc.sqlSave, cc.mutation, cc.hooks)
 }
 
@@ -85,6 +100,14 @@ func (cc *CommentCreate) Exec(ctx context.Context) error {
 func (cc *CommentCreate) ExecX(ctx context.Context) {
 	if err := cc.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (cc *CommentCreate) defaults() {
+	if _, ok := cc.mutation.CreatedAt(); !ok {
+		v := comment.DefaultCreatedAt()
+		cc.mutation.SetCreatedAt(v)
 	}
 }
 
@@ -122,8 +145,10 @@ func (cc *CommentCreate) sqlSave(ctx context.Context) (*Comment, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int(id)
+	}
 	cc.mutation.id = &_node.ID
 	cc.mutation.done = true
 	return _node, nil
@@ -134,6 +159,10 @@ func (cc *CommentCreate) createSpec() (*Comment, *sqlgraph.CreateSpec) {
 		_node = &Comment{config: cc.config}
 		_spec = sqlgraph.NewCreateSpec(comment.Table, sqlgraph.NewFieldSpec(comment.FieldID, field.TypeInt))
 	)
+	if id, ok := cc.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := cc.mutation.Body(); ok {
 		_spec.SetField(comment.FieldBody, field.TypeString, value)
 		_node.Body = value
@@ -197,6 +226,7 @@ func (ccb *CommentCreateBulk) Save(ctx context.Context) ([]*Comment, error) {
 	for i := range ccb.builders {
 		func(i int, root context.Context) {
 			builder := ccb.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CommentMutation)
 				if !ok {
@@ -223,7 +253,7 @@ func (ccb *CommentCreateBulk) Save(ctx context.Context) ([]*Comment, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int(id)
 				}

@@ -12,6 +12,7 @@ type Department struct {
 
 func (Department) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("id").Unique(),
 		field.String("name"),
 	}
 }

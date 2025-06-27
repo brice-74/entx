@@ -24,6 +24,10 @@ func NewClient(c *ent.Client) *Client {
   return &Client{c}
 }
 
+func (c *Client) Debug() entx.Client {
+	return &Client{c.Client.Debug()}
+}
+
 func (c *Client) Tx(ctx context.Context, opts *stdsql.TxOptions) (entx.Transaction, entx.Client, error) {
 	tx, err := c.Client.BeginTx(ctx, opts)
 	if err != nil {

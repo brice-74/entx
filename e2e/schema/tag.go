@@ -12,6 +12,7 @@ type Tag struct {
 
 func (Tag) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("id").Unique(),
 		field.String("name").Unique(),
 	}
 }
