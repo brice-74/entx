@@ -15,10 +15,223 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFilter(t *testing.T) {
-	t.Run("PanicPreprocessed", func(t *testing.T) {
-		require.Panics(t, func() { (&dsl.Filter{}).Predicate(nil) })
-	})
+func TestFilterPanicPreprocessed(t *testing.T) {
+	require.Panics(t, func() { (&dsl.Filter{}).Predicate(nil) })
+}
+
+func TestFilterQueryBuildError(t *testing.T) {
+	tests := []struct {
+		query       search.TargetedQuery
+		name        string
+		expectedErr *common.QueryBuildError
+	}{
+		{
+			name: "ErrChainBroken",
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field: "articles.title.tags",
+						},
+					},
+				},
+			},
+			expectedErr: &common.QueryBuildError{
+				Op:  "Filter.buildCondition",
+				Err: fmt.Errorf(dsl.ErrChainBroken, "title", "Article"),
+			},
+		},
+		{
+			name: "ErrUnknownLink",
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field: "unknow.field",
+						},
+					},
+				},
+			},
+			expectedErr: &common.QueryBuildError{
+				Op:  "Filter.buildCondition",
+				Err: fmt.Errorf(dsl.ErrUnknownLink, "unknow", "User"),
+			},
+		},
+		{
+			name: "ErrInvalidOperator",
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "name",
+							Operator: "",
+						},
+					},
+				},
+			},
+			expectedErr: &common.QueryBuildError{
+				Op:  "buildBasePredicate",
+				Err: fmt.Errorf(dsl.ErrInvalidOperator, ""),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tt.query.Execute(
+				context.Background(),
+				client,
+				entx.Graph,
+				&common.DefaultConf,
+			)
+
+			var qerr *search.QueryBuildError
+
+			require.Error(t, err)
+			require.ErrorAs(t, err, &qerr)
+			require.EqualError(t, err, tt.expectedErr.Error())
+		})
+	}
+}
+
+func TestFilterValidationErrors(t *testing.T) {
+	tests := []struct {
+		query        search.TargetedQuery
+		cfg          *search.Config
+		expectedRule string
+	}{
+		{
+			query: search.TargetedQuery{
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{}, {},
+					},
+				},
+			},
+			cfg: common.NewConfig(common.WithFilterConfig(common.FilterConfig{
+				MaxFilterTreeCount: 1,
+			})),
+			expectedRule: "MaxFilterTreeCount",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{Relation: "articles"},
+						{Relation: "comments"},
+					},
+				},
+			},
+			cfg: common.NewConfig(common.WithFilterConfig(common.FilterConfig{
+				MaxRelationTotalCount: 1,
+			})),
+			expectedRule: "MaxFilterRelationsPerTree",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{Relation: "articles.tags"},
+					},
+				},
+			},
+			cfg: common.NewConfig(common.WithFilterConfig(common.FilterConfig{
+				MaxRelationChainDepth: 1,
+			})),
+			expectedRule: "MaxRelationChainDepth",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{Relation: "articles..tags"},
+					},
+				},
+			},
+			expectedRule: "InvalidFilterRelationFormat",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{Field: "articles..name"},
+					},
+				},
+			},
+			expectedRule: "InvalidFilterFieldFormat",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "name",
+							Operator: "=",
+							Value:    []string{""},
+						},
+					},
+				},
+			},
+			expectedRule: "OperatorPrimitiveValue",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "name",
+							Operator: "IN",
+							Value:    []string{""},
+						},
+					},
+				},
+			},
+			expectedRule: "OperatorPrimitiveSliceValue",
+		},
+		{
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "name",
+							Operator: "#",
+						},
+					},
+				},
+			},
+			expectedRule: "InvalidOperator",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expectedRule, func(t *testing.T) {
+			if tt.cfg == nil {
+				tt.cfg = &common.DefaultConf
+			}
+			_, err := tt.query.Execute(
+				context.Background(),
+				client,
+				entx.Graph,
+				tt.cfg,
+			)
+
+			var verr *search.ValidationError
+
+			require.Error(t, err)
+			require.ErrorAs(t, err, &verr)
+			require.Equal(t, tt.expectedRule, verr.Rule)
+		})
+	}
 }
 
 func TestFilterOperators(t *testing.T) {
@@ -328,119 +541,173 @@ func TestFilterCondition(t *testing.T) {
 	})
 }
 
-func TestFilterRelationtypes(t *testing.T) {
+func TestFilterRelationTypes(t *testing.T) {
 	tests := []struct {
-		name  string
-		query search.TargetedQuery
+		name        string
+		query       search.TargetedQuery
+		expectedIDs []int
+		resultIDs   func([]entxstd.Entity) []int
 	}{
-		// ---------------------------
-		// 🟦 One-to-One (O2O)
-		// ---------------------------
 		{
-			name: "EmployeeO2OWithUserNameFilter",
-			query: q("Employee", filter(
-				relation("user", field("name", "=", "User One")),
-			)),
-		},
-
-		// ---------------------------
-		// 🟦 One-to-Many (O2M)
-		// ---------------------------
-		{
-			name: "UserO2MWithArticleTitleFilter",
-			query: q("User", filter(
-				relation("articles", field("title", "=", "Go Concurrency Patterns")),
-			)),
-		},
-		{
-			name: "ArticleO2MWithCommentBodyContains",
-			query: q("Article", filter(
-				relation("comments", field("body", "LIKE", "%goroutines%")),
-			)),
-		},
-
-		// ---------------------------
-		// 🟦 Many-to-One (M2O)
-		// ---------------------------
-		{
-			name: "CommentM2OWithUserNameFilter",
-			query: q("Comment", filter(
-				relation("user", field("name", "=", "User Two")),
-			)),
+			name: "O2O",
+			query: search.TargetedQuery{
+				From: "Employee",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "user.name",
+							Operator: "=",
+							Value:    "User One",
+						},
+					},
+				},
+			},
+			expectedIDs: []int{1},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.Employee](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
 		},
 		{
-			name: "EmployeeM2OWithDepartmentNameFilter",
-			query: q("Employee", filter(
-				relation("department", field("name", "=", "DSI")),
-			)),
-		},
-
-		// ---------------------------
-		// 🟦 Many-to-Many (M2M)
-		// ---------------------------
-		{
-			name: "ArticleM2MWithTagGo",
-			query: q("Article", filter(
-				relation("tags", field("name", "=", "Go")),
-			)),
-		},
-		{
-			name: "ArticleM2MWithTagsGoAndDevOps",
-			query: q("Article", filter(
-				relation("tags", and(
-					field("name", "=", "Go"),
-					field("name", "=", "DevOps"),
-				)),
-			)),
-		},
-
-		// ---------------------------
-		// 🟦 Self-relation (Employee.manager / Employee.reports)
-		// ---------------------------
-		{
-			name: "EmployeeSelfWithManagerUserName",
-			query: q("Employee", filter(
-				relation("manager.user", field("name", "=", "User Three")),
-			)),
+			name: "O2M",
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "articles.title",
+							Operator: "=",
+							Value:    "Go Concurrency Patterns",
+						},
+					},
+				},
+			},
+			expectedIDs: []int{1},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.User](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
 		},
 		{
-			name: "EmployeeSelfWithReportNamedUserOne",
-			query: q("Employee", filter(
-				relation("reports.user", field("name", "=", "User One")),
-			)),
+			name: "M2O",
+			query: search.TargetedQuery{
+				From: "Comment",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "user.name",
+							Operator: "=",
+							Value:    "User Two",
+						},
+					},
+				},
+			},
+			expectedIDs: []int{1},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.Comment](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
+		},
+		{
+			name: "M2M",
+			query: search.TargetedQuery{
+				From: "Article",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "tags.name",
+							Operator: "=",
+							Value:    "Go",
+						},
+						{
+							Field:    "tags.name",
+							Operator: "=",
+							Value:    "DevOps",
+						},
+					},
+				},
+			},
+			expectedIDs: []int{3},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.Article](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
+		},
+		{
+			name: "Self",
+			query: search.TargetedQuery{
+				From: "Employee",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Field:    "manager.user.name",
+							Operator: "=",
+							Value:    "User One",
+						},
+					},
+				},
+			},
+			expectedIDs: []int{2, 3},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.Employee](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
+		},
+		{
+			name: "UseRelationField",
+			query: search.TargetedQuery{
+				From: "User",
+				QueryOptions: search.QueryOptions{
+					Filters: dsl.Filters{
+						{
+							Relation: "articles",
+							And: dsl.Filters{
+								{
+									Field:    "tags.name",
+									Operator: "=",
+									Value:    "Go",
+								},
+								{
+									Field:    "tags.name",
+									Operator: "=",
+									Value:    "DevOps",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedIDs: []int{3},
+			resultIDs: func(e []entxstd.Entity) (ids []int) {
+				for _, u := range entxstd.AsTypedEntities[*ent.User](e) {
+					ids = append(ids, u.ID)
+				}
+				return
+			},
 		},
 	}
 
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := tt.query.Execute(
+				context.Background(),
+				client,
+				entx.Graph,
+				&common.DefaultConf,
+			)
 
-func q(from string, f dsl.Filters) search.TargetedQuery {
-	return search.TargetedQuery{
-		From: from,
-		QueryOptions: search.QueryOptions{
-			Filters: f,
-		},
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.expectedIDs, tt.resultIDs(res.Data.([]entxstd.Entity)), "IDs mismatch")
+		})
 	}
-}
-
-func filter(fs ...*dsl.Filter) dsl.Filters {
-	return dsl.Filters(fs)
-}
-
-func relation(path string, f *dsl.Filter) *dsl.Filter {
-	return &dsl.Filter{
-		Relation: path,
-		And:      dsl.Filters{f},
-	}
-}
-
-func field(name string, op dsl.Operator, val any) *dsl.Filter {
-	return &dsl.Filter{
-		Field:    name,
-		Operator: op,
-		Value:    val,
-	}
-}
-
-func and(fs ...*dsl.Filter) dsl.Filters {
-	return dsl.Filters(fs)
 }

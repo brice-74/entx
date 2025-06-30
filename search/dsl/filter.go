@@ -89,7 +89,7 @@ func (f *Filter) Predicate(node entx.Node) (func(*sql.Selector), error) {
 		panic("Filter.Predicate: called before preprocess")
 	}
 	if len(f.relationParts) > 0 {
-		finalNode, compose, err := resolveFilterChain(node, f.relationParts)
+		_, finalNode, compose, err := resolveFilterChain(node, f.relationParts)
 		if err != nil {
 			return nil, &common.QueryBuildError{
 				Op:  "Filter.Predicate",
@@ -107,10 +107,10 @@ func (f *Filter) Predicate(node entx.Node) (func(*sql.Selector), error) {
 
 // resolveFilterChain navigates a sequence of relations, returning the final Node
 // and a function to wrap a predicate across the chain.
-func resolveFilterChain(node entx.Node, rels []string) (entx.Node, func(func(*sql.Selector)) func(*sql.Selector), error) {
-	final, _, bridges, err := resolveChain(node, rels)
+func resolveFilterChain(node entx.Node, rels []string) (string, entx.Node, func(func(*sql.Selector)) func(*sql.Selector), error) {
+	final, field, bridges, err := resolveChain(node, rels)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 
 	compose := func(p func(*sql.Selector)) func(*sql.Selector) { return p }
@@ -121,7 +121,7 @@ func resolveFilterChain(node entx.Node, rels []string) (entx.Node, func(func(*sq
 			return b.FilterWith(prev(p))
 		}
 	}
-	return final, compose, nil
+	return field, final, compose, nil
 }
 
 // localPredicate builds predicates for Not, Or, And and the leaf condition.
@@ -166,11 +166,9 @@ func (f *Filter) localPredicate(node entx.Node) (func(*sql.Selector), error) {
 
 func (f *Filter) buildCondition(node entx.Node) (func(*sql.Selector), error) {
 	lenFieldParts := len(f.fieldParts)
-	relations := f.fieldParts[:lenFieldParts-1]
-	field := f.fieldParts[lenFieldParts-1]
 
 	if lenFieldParts > 1 {
-		_, compose, err := resolveFilterChain(node, relations)
+		field, _, compose, err := resolveFilterChain(node, f.fieldParts)
 		if err != nil {
 			return nil, &common.QueryBuildError{
 				Op:  "Filter.buildCondition",
@@ -186,15 +184,17 @@ func (f *Filter) buildCondition(node entx.Node) (func(*sql.Selector), error) {
 		return compose(base), nil
 	}
 
+	field := f.fieldParts[lenFieldParts-1]
 	base, err := buildBasePredicate(field, f.Operator, f.Value)
 	if err != nil {
-		return nil, &common.QueryBuildError{
-			Op:  "Filter.buildCondition",
-			Err: err,
-		}
+		return nil, err
 	}
 	return base, nil
 }
+
+var (
+	ErrInvalidOperator = "invalid operator %q"
+)
 
 func buildBasePredicate(
 	field string,
@@ -223,7 +223,10 @@ func buildBasePredicate(
 	case OpNotIn:
 		return func(s *sql.Selector) { s.Where(sql.Not(sql.In(s.C(field), value.([]any)...))) }, nil
 	default:
-		return nil, fmt.Errorf("invalid operator %q", op)
+		return nil, &common.QueryBuildError{
+			Op:  "buildBasePredicate",
+			Err: fmt.Errorf(ErrInvalidOperator, op),
+		}
 	}
 }
 
@@ -256,9 +259,9 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 			}
 		}
 		f.fieldParts = parts
-		if len(parts) > 1 {
-			currentDepth += len(parts) - 1
-			*totalRelations += len(parts) - 1
+		if length := len(parts); length > 1 {
+			currentDepth += length - 1
+			*totalRelations += length - 1
 		}
 	}
 
@@ -267,16 +270,22 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 	case OpIn, OpNotIn:
 		if !IsSliceOfPrimitiveAnys(f.Value) {
 			return &common.ValidationError{
-				Rule: "OperatorValue",
+				Rule: "OperatorPrimitiveSliceValue",
 				Err:  fmt.Errorf("'%s' operator need slice value of primitive types, got %T", op, f.Value),
 			}
 		}
-	default:
+	case OpEqual, OpNotEqual, OpGreaterThan, OpGreaterEqual,
+		OpLessThan, OpLessEqual, OpLike, OpNotLike:
 		if !IsPrimitive(f.Value) {
 			return &common.ValidationError{
-				Rule: "OperatorValue",
+				Rule: "OperatorPrimitiveValue",
 				Err:  fmt.Errorf("'%s' operator need primitive type value, got %T", op, f.Value),
 			}
+		}
+	default:
+		return &common.ValidationError{
+			Rule: "InvalidOperator",
+			Err:  fmt.Errorf("invalid operator, got %s", op),
 		}
 	}
 

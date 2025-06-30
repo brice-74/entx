@@ -70,11 +70,17 @@ func (p QueryPolicy) EvalQuery(ctx context.Context, q ent.Query) error {
 }
 
 func EnforcePolicy(ctx context.Context, node entx.Node, op QueryOp) (func(*sql.Selector), error) {
-	m := QueryModifier{
-		Op: op,
+	if policy := node.Policy(); policy != nil {
+		m := QueryModifier{
+			Op: op,
+		}
+
+		if err := policy.EvalQuery(ctx, &m); err != nil {
+			return nil, err
+		}
+
+		return m.Modifier, nil
 	}
-	if err := node.Policy().EvalQuery(ctx, &m); err != nil {
-		return nil, err
-	}
-	return m.Modifier, nil
+
+	return nil, nil
 }
