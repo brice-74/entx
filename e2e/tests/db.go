@@ -62,6 +62,8 @@ func rollback(tx *ent.Tx, err error) error {
 }
 
 func FlushDBt(t *testing.T, client *ent.Client) {
+	t.Helper()
+
 	ctx := context.Background()
 	if err := FlushDB(ctx, client); err != nil {
 		t.Fatal(t)

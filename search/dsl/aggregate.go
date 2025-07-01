@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -32,6 +33,12 @@ type BaseAggregate struct {
 	preprocessed bool
 }
 
+var (
+	ErrDistinctWithoutField = "cannot use DISTINCT with wildcard '*'; specify a column"
+	ErrAggWithoutField      = "aggregate %q on '*' is invalid; only COUNT(*) is allowed"
+	ErrUnsupportedAggType   = "unsupported aggregate type %q"
+)
+
 // buildExpr builds the aggregate function, expression, and alias.
 func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 	fn func(string) string, expr string, alias string, err error,
@@ -44,13 +51,13 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 		if b.Distinct {
 			return nil, "", "", &common.QueryBuildError{
 				Op:  "BaseAggregate.buildExpr",
-				Err: fmt.Errorf("cannot use DISTINCT with wildcard '*'; specify a column"),
+				Err: errors.New(ErrDistinctWithoutField),
 			}
 		}
 		if b.Type != AggCount {
 			return nil, "", "", &common.QueryBuildError{
 				Op:  "BaseAggregate.buildExpr",
-				Err: fmt.Errorf("aggregate %q on '*' is invalid; only COUNT(*) is allowed", b.Type),
+				Err: fmt.Errorf(ErrAggWithoutField, b.Type),
 			}
 		}
 		resolvedField = "*"
@@ -70,7 +77,7 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 	default:
 		return nil, "", "", &common.QueryBuildError{
 			Op:  "BaseAggregate.buildExpr",
-			Err: fmt.Errorf("unsupported aggregate type %q", b.Type),
+			Err: fmt.Errorf(ErrUnsupportedAggType, b.Type),
 		}
 	}
 
@@ -91,11 +98,7 @@ func (b *BaseAggregate) buildExpr(tbl *sql.SelectTable, resolvedField string) (
 			prefix += "_distinct"
 		}
 		safe := strings.ReplaceAll(b.Field, ".", "_")
-		raw := fmt.Sprintf("%s_%s", prefix, safe)
-		if len(raw) > 60 {
-			raw = raw[:60]
-		}
-		alias = raw
+		alias = fmt.Sprintf("%s_%s", prefix, safe)
 	}
 
 	return fn, expr, alias, nil
@@ -278,6 +281,11 @@ func (a *Aggregate) ValidateAndPreprocess(cfg *common.AggregateConfig) error {
 	return nil
 }
 
+var (
+	ErrNodeNotExist     = "node named '%s' don't exist"
+	ErrNodeNotHaveField = "node '%s' don't have field named '%s'"
+)
+
 type OverallAggregate struct {
 	BaseAggregate
 }
@@ -287,7 +295,7 @@ func (a *OverallAggregate) resolveField(registry entx.Graph) (node entx.Node, fi
 	if node == nil {
 		err = &common.QueryBuildError{
 			Op:  "OverallAggregate.resolveField",
-			Err: fmt.Errorf("node named \"%s\" don't exist", a.fieldParts[0]),
+			Err: fmt.Errorf(ErrNodeNotExist, a.fieldParts[0]),
 		}
 		return
 	}
@@ -298,7 +306,7 @@ func (a *OverallAggregate) resolveField(registry entx.Graph) (node entx.Node, fi
 		} else {
 			err = &common.QueryBuildError{
 				Op:  "OverallAggregate.resolveField",
-				Err: fmt.Errorf("node \"%s\" don't have field named \"%s\"", node.Name(), a.fieldParts[1]),
+				Err: fmt.Errorf(ErrNodeNotHaveField, node.Name(), a.fieldParts[1]),
 			}
 		}
 	}
@@ -413,7 +421,7 @@ func (oas OverallAggregates) Execute(
 
 func (oas OverallAggregates) BuildScalars(ctx context.Context, graph entx.Graph, dialect string) ([]*common.ScalarQuery, error) {
 	if length := len(oas); length > 0 {
-		var scalars = make([]*common.ScalarQuery, 0, length)
+		var scalars = make([]*common.ScalarQuery, length)
 
 		for i, oa := range oas {
 			s, err := oa.BuildScalar(ctx, graph, dialect)
@@ -422,6 +430,8 @@ func (oas OverallAggregates) BuildScalars(ctx context.Context, graph entx.Graph,
 			}
 			scalars[i] = s
 		}
+
+		return scalars, nil
 	}
 	return nil, nil
 }

@@ -3,6 +3,8 @@ package entx
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -28,7 +30,7 @@ func AddAggregatesFromValues(fields ...string) EntityHandler {
 				if m.Aggregates == nil {
 					m.Aggregates = make(map[string]any, len(fields))
 				}
-				m.Aggregates[f] = v
+				m.Aggregates[f] = NormalizeAggregateValue(v)
 			}
 		}
 		return nil
@@ -59,6 +61,32 @@ func ToInterceptor[T Entity](handlers ...EntityHandler) ent.Interceptor {
 			return value, nil
 		})
 	})
+}
+
+func NormalizeAggregateValue(v any) any {
+	switch val := v.(type) {
+	case nil:
+		return nil
+	case int, int64, int32, uint, uint64:
+		return val
+	case float32, float64:
+		return val
+	case []uint8:
+		s := string(val)
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+		return s
+	case string:
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
+		return val
+	case time.Time:
+		return val.Format(time.RFC3339)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 // TODO: create slice pool to avoid re allocation ?

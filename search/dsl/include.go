@@ -55,6 +55,10 @@ type Include struct {
 	preprocessed  bool
 }
 
+var (
+	ErrBridgeNotFound = "relation %q not found on node %q"
+)
+
 func (inc *Include) PredicateQ(ctx context.Context, node entx.Node, dialect string) (func(entx.Query), error) {
 	if !inc.preprocessed {
 		panic("Include.PredicateQ: called before preprocess")
@@ -81,7 +85,7 @@ func (inc *Include) PredicateQ(ctx context.Context, node entx.Node, dialect stri
 		if bridge == nil {
 			return nil, &common.QueryBuildError{
 				Op:  "Include.PredicateQ",
-				Err: fmt.Errorf("relation %q not found on node %q", rel, current.Name()),
+				Err: fmt.Errorf(ErrBridgeNotFound, rel, current.Name()),
 			}
 		}
 

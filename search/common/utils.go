@@ -62,8 +62,8 @@ func MergeSlices[T any](a, b []T) []T {
 func CheckMaxSearches(cfg *Config, count int) (err error) {
 	if cfg.MaxSearchesPerRequest != 0 && count > cfg.MaxSearchesPerRequest {
 		err = &ValidationError{
-			Rule: "MaxSearchesPerBundle",
-			Err:  fmt.Errorf("found %d searches in bundle, but the maximum allowed is %d", count, cfg.MaxSearchesPerRequest),
+			Rule: "MaxSearchesPerRequest",
+			Err:  fmt.Errorf("found %d searches, but the maximum allowed is %d", count, cfg.MaxSearchesPerRequest),
 		}
 	}
 	return
@@ -72,8 +72,8 @@ func CheckMaxSearches(cfg *Config, count int) (err error) {
 func CheckMaxAggregates(cfg *Config, count int) (err error) {
 	if cfg.MaxAggregatesPerRequest != 0 && count > cfg.MaxAggregatesPerRequest {
 		err = &ValidationError{
-			Rule: "MaxAggregatesPerBundle",
-			Err:  fmt.Errorf("found %d aggregates in bundle, but the maximum allowed is %d", count, cfg.MaxAggregatesPerRequest),
+			Rule: "MaxAggregatesPerRequest",
+			Err:  fmt.Errorf("found %d aggregates, but the maximum allowed is %d", count, cfg.MaxAggregatesPerRequest),
 		}
 	}
 	return

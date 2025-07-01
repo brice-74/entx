@@ -2,6 +2,7 @@ package search
 
 import (
 	"github.com/brice-74/entx/search/common"
+	"github.com/brice-74/entx/search/dsl"
 )
 
 type QueryBuildError = common.QueryBuildError
@@ -18,6 +19,9 @@ const OpAggregateOverall = common.OpAggregateOverall
 const OpRootQuery = common.OpRootQuery
 const OpIncludeQuery = common.OpIncludeQuery
 const OpLastIncludeQuery = common.OpLastIncludeQuery
+
+type OverallAggregate = dsl.OverallAggregate
+type OverallAggregates = dsl.OverallAggregates
 
 type AggregatesResponse = common.AggregatesResponse
 type MetaResponse = common.MetaResponse

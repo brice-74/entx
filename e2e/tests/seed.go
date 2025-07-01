@@ -29,6 +29,17 @@ func SeedBaseData(ctx context.Context, client *ent.Client) error {
 				SetName("User Three").
 				SetAge(40).
 				SetIsActive(false),
+			client.User.Create().
+				SetID(4).
+				SetEmail("user4@example.com").
+				SetName("User Four").
+				SetAge(50).
+				SetIsActive(false),
+			client.User.Create().
+				SetID(5).
+				SetEmail("user5@example.com").
+				SetName("User Five").
+				SetAge(60),
 		).Exec(ctx); err != nil {
 			return err
 		}
@@ -124,6 +135,16 @@ func SeedBaseData(ctx context.Context, client *ent.Client) error {
 			client.Employee.Create().
 				SetID(3).
 				SetUserID(3).       // User 3
+				SetDepartmentID(3). // Department DSI
+				SetManagerID(1),
+			client.Employee.Create().
+				SetID(4).
+				SetUserID(4).       // User 4
+				SetDepartmentID(3). // Department DSI
+				SetManagerID(1),
+			client.Employee.Create().
+				SetID(5).
+				SetUserID(5).       // User 5
 				SetDepartmentID(3). // Department DSI
 				SetManagerID(1),
 		).Exec(ctx); err != nil {

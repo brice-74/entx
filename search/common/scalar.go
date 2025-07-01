@@ -17,7 +17,7 @@ type ScalarQuery struct {
 }
 
 func ExecuteScalar(ctx context.Context, client entx.Client, scalar *ScalarQuery) (any, error) {
-	query, args := sql.SelectExpr(scalar.Selector).Query()
+	query, args := scalar.Selector.Query()
 	rows, err := client.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

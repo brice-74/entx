@@ -53,7 +53,7 @@ func (c *Client) GetEntityClient(n {{ $entxImportName }}.Node) ({{ $entxImportNa
   {{- end }}
   {{- end }}
   default:
-    return nil, fmt.Errorf("node named \"%s\" hasn't client", nodeName)
+    return nil, fmt.Errorf("node named '%s' hasn't client", nodeName)
   }
 }
 

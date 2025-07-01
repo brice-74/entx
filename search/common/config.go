@@ -62,7 +62,7 @@ var defaultConf = Config{
 		MaxLimit:     100,
 		DefaultLimit: 25,
 	},
-	ScalarQueriesChunkSize:       6,
+	ScalarQueriesChunkSize:       7,
 	MaxParallelWorkersPerRequest: -1,
 }
 
