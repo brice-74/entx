@@ -18,10 +18,10 @@ const (
 	OpGreaterEqual Operator = ">="
 	OpLessThan     Operator = "<"
 	OpLessEqual    Operator = "<="
-	OpLike         Operator = "LIKE"
-	OpNotLike      Operator = "NOT LIKE"
-	OpIn           Operator = "IN"
-	OpNotIn        Operator = "NOT IN"
+	OpLike         Operator = "like"
+	OpNotLike      Operator = "not like"
+	OpIn           Operator = "in"
+	OpNotIn        Operator = "not in"
 )
 
 type Filters []*Filter
@@ -268,18 +268,32 @@ func (f *Filter) walkValidate(maxDepth, currentDepth int, totalFilters, totalRel
 	switch op := f.Operator; op {
 	case OpEmpty:
 	case OpIn, OpNotIn:
-		if !IsSliceOfPrimitiveAnys(f.Value) {
+		if !IsSliceOfStringOrNumber(f.Value) {
 			return &common.ValidationError{
-				Rule: "OperatorPrimitiveSliceValue",
-				Err:  fmt.Errorf("'%s' operator need slice value of primitive types, got %T", op, f.Value),
+				Rule: "OperatorSliceValue",
+				Err:  fmt.Errorf("'%s' operator need slice value of string or number, got %T", op, f.Value),
 			}
 		}
-	case OpEqual, OpNotEqual, OpGreaterThan, OpGreaterEqual,
-		OpLessThan, OpLessEqual, OpLike, OpNotLike:
+	case OpEqual, OpNotEqual:
 		if !IsPrimitive(f.Value) {
 			return &common.ValidationError{
 				Rule: "OperatorPrimitiveValue",
 				Err:  fmt.Errorf("'%s' operator need primitive type value, got %T", op, f.Value),
+			}
+		}
+	case OpGreaterThan, OpGreaterEqual,
+		OpLessThan, OpLessEqual:
+		if !IsNumber(f.Value) {
+			return &common.ValidationError{
+				Rule: "OperatorNumberValue",
+				Err:  fmt.Errorf("'%s' operator need number type value, got %T", op, f.Value),
+			}
+		}
+	case OpLike, OpNotLike:
+		if !IsString(f.Value) {
+			return &common.ValidationError{
+				Rule: "OperatorStringValue",
+				Err:  fmt.Errorf("'%s' operator need string type value, got %T", op, f.Value),
 			}
 		}
 	default:
@@ -329,10 +343,41 @@ func IsPrimitive(val any) bool {
 	}
 }
 
-func IsSliceOfPrimitiveAnys(val any) bool {
+func IsString(val any) bool {
+	switch val.(type) {
+	case string:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsNumber(val any) bool {
+	switch val.(type) {
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsStringOrNumber(val any) bool {
+	switch val.(type) {
+	case string, int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsSliceOfStringOrNumber(val any) bool {
 	if slice, ok := val.([]any); ok {
 		for _, v := range slice {
-			if !IsPrimitive(v) {
+			if !IsStringOrNumber(v) {
 				return false
 			}
 		}

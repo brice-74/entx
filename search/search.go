@@ -102,7 +102,7 @@ type QueryOptions struct {
 	Select         dsl.Select     `json:"select,omitempty"`
 	Filters        dsl.Filters    `json:"filters,omitempty"`
 	Includes       dsl.Includes   `json:"includes,omitempty"`
-	Sort           dsl.Sorts      `json:"sort,omitempty"`
+	Sorts          dsl.Sorts      `json:"sorts,omitempty"`
 	Aggregates     dsl.Aggregates `json:"aggregates,omitempty"`
 	WithPagination bool           `json:"with_pagination,omitempty"`
 	// Enable transaction between query and pagination.
@@ -315,7 +315,7 @@ func (qo *QueryOptions) Build(
 		preds = append(preds, ps...)
 	}
 
-	if ps, err := qo.Sort.Predicate(node); err != nil {
+	if ps, err := qo.Sorts.Predicate(node); err != nil {
 		return nil, err
 	} else if len(ps) > 0 {
 		preds = append(preds, ps...)
@@ -407,7 +407,7 @@ func (qo *QueryOptions) ValidateAndPreprocess(c *Config) (err error) {
 	if err = qo.Aggregates.ValidateAndPreprocess(&c.AggregateConfig); err != nil {
 		return
 	}
-	if err = qo.Sort.ValidateAndPreprocess(&c.SortConfig); err != nil {
+	if err = qo.Sorts.ValidateAndPreprocess(&c.SortConfig); err != nil {
 		return
 	}
 	qo.Pageable.Sanitize(&c.PageableConfig)

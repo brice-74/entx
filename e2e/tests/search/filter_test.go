@@ -75,8 +75,10 @@ func TestFilterValidation(t *testing.T) {
 		{"MaxRelationChainDepth", dsl.Filters{{Relation: "articles.tags"}}, common.NewConfig(common.WithFilterConfig(common.FilterConfig{MaxRelationChainDepth: 1}))},
 		{"InvalidFilterRelationFormat", dsl.Filters{{Relation: "articles..tags"}}, &common.DefaultConf},
 		{"InvalidFilterFieldFormat", dsl.Filters{{Field: "articles..name"}}, &common.DefaultConf},
-		{"OperatorPrimitiveValue", dsl.Filters{{Field: "name", Operator: "=", Value: []string{""}}}, &common.DefaultConf},
-		{"OperatorPrimitiveSliceValue", dsl.Filters{{Field: "name", Operator: "IN", Value: []string{""}}}, &common.DefaultConf},
+		{"OperatorPrimitiveValue", dsl.Filters{{Field: "name", Operator: dsl.OpEqual, Value: []string{""}}}, &common.DefaultConf},
+		{"OperatorSliceValue", dsl.Filters{{Field: "name", Operator: dsl.OpIn, Value: []struct{}{}}}, &common.DefaultConf},
+		{"OperatorNumberValue", dsl.Filters{{Field: "name", Operator: dsl.OpGreaterThan, Value: ""}}, &common.DefaultConf},
+		{"OperatorStringValue", dsl.Filters{{Field: "name", Operator: dsl.OpLike, Value: 0}}, &common.DefaultConf},
 		{"InvalidOperator", dsl.Filters{{Field: "name", Operator: "#"}}, &common.DefaultConf},
 	}
 	for _, c := range cases {
@@ -146,8 +148,8 @@ func TestFilterCondition(t *testing.T) {
 				From: "User",
 				QueryOptions: search.QueryOptions{Filters: dsl.Filters{{
 					Or: dsl.Filters{
-						{Field: "age", Operator: "=", Value: 30},
-						{Field: "is_active", Operator: "=", Value: false},
+						{Field: "age", Operator: dsl.OpEqual, Value: 30},
+						{Field: "is_active", Operator: dsl.OpEqual, Value: false},
 					},
 				}}},
 			},
@@ -165,8 +167,8 @@ func TestFilterCondition(t *testing.T) {
 				From: "User",
 				QueryOptions: search.QueryOptions{Filters: dsl.Filters{{
 					And: dsl.Filters{
-						{Field: "age", Operator: "=", Value: 40},
-						{Field: "is_active", Operator: "=", Value: false},
+						{Field: "age", Operator: dsl.OpEqual, Value: 40},
+						{Field: "is_active", Operator: dsl.OpEqual, Value: false},
 					},
 				}}},
 			},
@@ -182,7 +184,7 @@ func TestFilterCondition(t *testing.T) {
 			query: search.TargetedQuery{
 				From: "User",
 				QueryOptions: search.QueryOptions{Filters: dsl.Filters{{
-					Not: &dsl.Filter{Field: "is_active", Operator: "=", Value: true},
+					Not: &dsl.Filter{Field: "is_active", Operator: dsl.OpEqual, Value: true},
 				}}},
 			},
 			wantCount: 2,
@@ -198,10 +200,10 @@ func TestFilterCondition(t *testing.T) {
 				QueryOptions: search.QueryOptions{Filters: dsl.Filters{{
 					Or: dsl.Filters{
 						{And: dsl.Filters{
-							{Field: "age", Operator: "=", Value: 40},
-							{Field: "is_active", Operator: "=", Value: false},
+							{Field: "age", Operator: dsl.OpEqual, Value: 40},
+							{Field: "is_active", Operator: dsl.OpEqual, Value: false},
 						}},
-						{Field: "age", Operator: "=", Value: 20},
+						{Field: "age", Operator: dsl.OpEqual, Value: 20},
 					},
 				}}},
 			},
@@ -231,32 +233,32 @@ func TestFilterRelationTypes(t *testing.T) {
 	}{
 		{
 			"O2O",
-			search.TargetedQuery{From: "Employee", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "user.name", Operator: "=", Value: "User One"}}}},
+			search.TargetedQuery{From: "Employee", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "user.name", Operator: dsl.OpEqual, Value: "User One"}}}},
 			[]int{1},
 		},
 		{
 			"O2M",
-			search.TargetedQuery{From: "User", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "articles.title", Operator: "=", Value: "Go Concurrency Patterns"}}}},
+			search.TargetedQuery{From: "User", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "articles.title", Operator: dsl.OpEqual, Value: "Go Concurrency Patterns"}}}},
 			[]int{1},
 		},
 		{
 			"M2O",
-			search.TargetedQuery{From: "Comment", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "user.name", Operator: "=", Value: "User Two"}}}},
+			search.TargetedQuery{From: "Comment", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "user.name", Operator: dsl.OpEqual, Value: "User Two"}}}},
 			[]int{1},
 		},
 		{
 			"M2M",
-			search.TargetedQuery{From: "Article", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "tags.name", Operator: "=", Value: "Go"}, {Field: "tags.name", Operator: "=", Value: "DevOps"}}}},
+			search.TargetedQuery{From: "Article", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "tags.name", Operator: dsl.OpEqual, Value: "Go"}, {Field: "tags.name", Operator: dsl.OpEqual, Value: "DevOps"}}}},
 			[]int{3},
 		},
 		{
 			"Self",
-			search.TargetedQuery{From: "Employee", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "manager.user.name", Operator: "=", Value: "User One"}}}},
+			search.TargetedQuery{From: "Employee", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Field: "manager.user.name", Operator: dsl.OpEqual, Value: "User One"}}}},
 			[]int{2, 3, 4, 5},
 		},
 		{
 			"RelationField",
-			search.TargetedQuery{From: "User", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Relation: "articles", And: dsl.Filters{{Field: "tags.name", Operator: "=", Value: "Go"}, {Field: "tags.name", Operator: "=", Value: "DevOps"}}}}}},
+			search.TargetedQuery{From: "User", QueryOptions: search.QueryOptions{Filters: dsl.Filters{{Relation: "articles", And: dsl.Filters{{Field: "tags.name", Operator: dsl.OpEqual, Value: "Go"}, {Field: "tags.name", Operator: dsl.OpEqual, Value: "DevOps"}}}}}},
 			[]int{3},
 		},
 	}
