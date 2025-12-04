@@ -1,0 +1,38 @@
+{{ define "import/additional/with_search_package" }}
+  {{- if isGenType . }}
+    {{- if isNodeInclude . }}
+      "{{ entxImportPath }}"
+    {{- end }}
+  {{- end }}
+{{ end }}
+
+{{- define "model/fields/additional" -}}
+  {{- if isNodeInclude . -}}
+    // Meta is used by entx search to add metadata to the response.
+    Meta *{{ entxImportName }}.EntityMeta `json:"meta,omitempty"`
+  {{- end -}}
+{{- end -}}
+
+{{ define "model/additional" }}
+  {{- if isNodeInclude . }}
+    // Metadatas allow you to retrieve or edit metadatas
+    func (e *{{ .Name }}) Metadatas() *{{ entxImportName }}.EntityMeta { 
+      if e.Meta == nil {
+        e.Meta = new({{ entxImportName }}.EntityMeta)
+      }
+      return e.Meta 
+    }
+  {{- end }}
+{{ end }}
+
+{{ define "dialect/sql/query/additional/*" }}
+  {{ $builder := $.Scope.Builder }}
+
+  {{- if isNodeInclude .Type -}}
+    // AppendInterceptors allows query interceptors to be added dynamically. Used by entx search to add metadata to inclusions.
+    func (q *{{ $builder }}) AppendInterceptors(inters ...Interceptor) *{{ $builder }} {
+      q.inters = append(q.inters, inters...)
+      return q
+    }
+  {{- end }}
+{{ end }}
